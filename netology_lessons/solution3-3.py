@@ -34,7 +34,8 @@ class VKPerson:
         return f"ID: {self.user_id} {self.name} {self.lastname} {self.link}"
 
     def __and__(self, other):
-        return set(self.friends.keys()) & set(other.friends.keys())
+        common_set = set(self.friends.keys()) & set(other.friends.keys())
+        return [self.friends[friend] for friend in common_set]
 
 
 def main():
@@ -181,7 +182,7 @@ def common(query):
     print(f"Общие друзья пользователей {user1!r} и {user2!r}:\n")
     common_friends = user1 & user2
     for friend in common_friends:
-        print(user1.friends[friend])
+        print(friend)
 
 
 def show_all():
