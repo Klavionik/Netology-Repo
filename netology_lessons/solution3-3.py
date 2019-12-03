@@ -136,6 +136,14 @@ def add_user(user):
     users[user_id] = VKPerson(user_id, user_name, user_lastname)
 
 
+def common(query):
+    user1, user2 = [users[user.strip()] for user in query.split("&")]
+    print(f"Общие друзья пользователей {user1!r} и {user2!r}:\n")
+    common_friends = user1 & user2
+    for friend in common_friends:
+        print(friend)
+
+
 def fetch_friends(params):
     """
     Fetches friends data from VK API and adds friends to VKPerson objects
@@ -175,14 +183,6 @@ def fetch_user(user_ids, params):
 
     for user in users_json["response"]:
         add_user(user)
-
-
-def common(query):
-    user1, user2 = [users[user.strip()] for user in query.split("&")]
-    print(f"Общие друзья пользователей {user1!r} и {user2!r}:\n")
-    common_friends = user1 & user2
-    for friend in common_friends:
-        print(friend)
 
 
 def show_all():
