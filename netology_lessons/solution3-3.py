@@ -4,7 +4,7 @@
 
 import webbrowser
 import requests
-from copy import deepcopy
+from copy import copy
 from time import sleep
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
@@ -59,10 +59,7 @@ def main():
             elif key == "add":
                 ids = input("Введите ID или псевдоним пользователя (screen name)\n"
                             "Вводя несколько ID, разделяйте их пробелом\n")
-                # если не использовать deepcopy, после работы функций fetch_friends()
-                # и fetch_user() у auth_params остаются лишние ключи
-                fetch_user(ids, deepcopy(auth_params))
-                fetch_friends(deepcopy(auth_params))
+                fetch_user(ids, auth_params)
             elif key == "show":
                 show_all()
             elif "&" in key:
@@ -113,7 +110,7 @@ def authorize():
         return main()
 
 
-def add_friends(friend, user):
+def add_friend(friend, user):
     """
     Creates a new VKPerson object and adds it to the user's instance "friends" attribute
 
@@ -125,18 +122,26 @@ def add_friends(friend, user):
     user.friends[friend_id] = VKPerson(friend_id, friend_name, friend_lastname)
 
 
-def add_user(user):
+def add_user(user, params):
     """
     Creates a new VKPerson object and adds it to the users dictionary
 
     :param user: User object returned from fetch_user() via VK API
+    :param params: Dictionary of authorization parameters
     """
     user_id = str(user["id"])
     user_name, user_lastname = user["first_name"], user["last_name"]
     users[user_id] = VKPerson(user_id, user_name, user_lastname)
 
+    fetch_friends(user_id, users[user_id], params)
+
 
 def common(query):
+    """
+    Finds common friends between two users, using __and__ method of the VKPerson class
+
+    :param query: String query from user given as "<ID1> & <ID2>"
+    """
     user1, user2 = [users[user.strip()] for user in query.split("&")]
     print(f"Общие друзья пользователей {user1!r} и {user2!r}:\n")
     common_friends = user1 & user2
@@ -144,26 +149,28 @@ def common(query):
         print(friend)
 
 
-def fetch_friends(params):
+def fetch_friends(user_id, user_instance, params):
     """
-    Fetches friends data from VK API and adds friends to VKPerson objects
+    Fetches friends data from VK API
 
+    :param user_id: User ID for VKPerson object
+    :param user_instance: VKPerson object, created by add_user()
     :param params: Dictionary of authorization parameters
     """
     # дата рождения дальше не используется, но без поля fields в
     # запросе метод API возвращает только ID друзей,
     # а не полноценные объекты пользователей с именем и фамилией
-    params["fields"] = "bdate"
+    friends_params = copy(params)
+    friends_params["user_id"] = user_id
+    friends_params["fields"] = "bdate"
 
-    for user_id, user_instance in users.items():
-        params["user_id"] = user_id
-        response = requests.get(API_URL + "/friends.get", params)
-        friends_json = response.json()
+    response = requests.get(API_URL + "/friends.get", friends_params)
+    friends_json = response.json()
 
-        assert "response" in friends_json, f"{friends_json['error']['error_msg']}"
+    assert "response" in friends_json, f"fetch_friend(): {friends_json['error']['error_msg']}"
 
-        for friend in friends_json["response"]["items"]:
-            add_friends(friend, user_instance)
+    for friend in friends_json["response"]["items"]:
+        add_friend(friend, user_instance)
 
 
 def fetch_user(user_ids, params):
@@ -171,18 +178,19 @@ def fetch_user(user_ids, params):
     Fetches user data from VK API
 
     :param user_ids: String containing VK user IDs to add
-    :param params: Dictionary of request parameters
+    :param params: Dictionary of authorization parameters
     """
     # ключи в поле user_ids должны быть разделены запятой
-    params["user_ids"] = ",".join(user_ids.split())
+    user_params = copy(params)
+    user_params["user_ids"] = ",".join(user_ids.split())
 
-    response = requests.get(API_URL + "/users.get", params)
+    response = requests.get(API_URL + "/users.get", user_params)
     users_json = response.json()
 
-    assert "response" in users_json, f"{users_json['error']['error_msg']}"
+    assert "response" in users_json, f"fetch_user(): {users_json['error']['error_msg']}"
 
     for user in users_json["response"]:
-        add_user(user)
+        add_user(user, params)
 
 
 def show_all():
