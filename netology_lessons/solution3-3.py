@@ -13,7 +13,7 @@ API_URL = "https://api.vk.com/method"
 AUTHORIZE_URL = "https://oauth.vk.com/authorize"
 REDIRECT_URI = "https://oauth.vk.com/blank.html"
 # TODO 1: Заменить CLIENT_ID на id приложения
-CLIENT_ID = "INSERT_CLIENT_ID"
+CLIENT_ID = "7229091"
 
 users = {}
 
