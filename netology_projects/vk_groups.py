@@ -1,3 +1,15 @@
+
+"""
+SPY GAME: a coursework for Netology Python course
+Goal: Find and print every VK group which member the user is,
+but his friends are not and save this data as a JSON file.
+
+WORKFLOW:
+Get user groups and friends -> check for every group in user groups if any of user friends is a member
+of this group -> if true, then add this group to the set of the common groups -> calculate difference between
+user groups and common groups -> fetch and print info about these groups -> write the info down to a file
+"""
+
 import requests
 import json
 import os
@@ -26,80 +38,33 @@ END = '\033[0m'  # end of coloring
 OUTPUT = "groups.json"
 LOG = "log.txt"
 
-
-"""
-Get user groups -> get user friends -> check for every group in my groups if any of my friends is a member
-of this group -> if true, then add this group to the list of the common groups -> calculate difference between
-user groups and common groups -> fetch and print info on these groups -> write the info down to a file
-"""
+RETRY = 3
 
 
-def main(chunk_size):
-    # chunk is the amount of IDs sent with every request in find_common()
-    if not chunk_size:
-        chunk_size = 50
+class APIError(Exception):
 
-    clear_screen()
-    display_title()
-
-    # retrieve user info
-    user = input(f"{Y}Enter user ID or a screen name:{END}\n")
-    print(f"\n{Y}Retrieving user info...{END}\n")
-    sleep(1)
-
-    user_groups, user_friends = fetch_user_info(user)
-
-    # fetch common groups
-    print(f"\n{Y}Fetching common groups...{END}")
-    sleep(2)
-    print(f"{B}Status:{END} {Y}In progress{END}\n")
-    sleep(1)
-
-    common_groups = find_common(user_groups, user_friends, chunk_size)
-
-    print(f"\n\n{B}Status:{END} {G}Successful{END}\n")
-    sleep(2)
-
-    # find uncommon groups
-    print(f"{Y}Calculating difference...{END}")
-    sleep(1)
-
-    uncommon_groups = set(user_groups) - set(common_groups)
-
-    print(f"{G}UNCOMMON GROUPS FOUND: {len(uncommon_groups)}{END}\n")
-    sleep(2)
-
-    # fetch uncommon groups info
-    print(f"{Y}Fetching uncommon groups info...{END}")
-    sleep(2)
-    print(f"{B}Status:{END} {Y}In progress{END}\n")
-    sleep(1)
-
-    uncommon_groups_info = fetch_uncommon_info(uncommon_groups)
-
-    print(f"\n\n{B}Status:{END} {G}Successful{END}\n")
-    sleep(2)
-
-    # display retrieved info and write it to a JSON file
-    print_and_write(uncommon_groups_info)
-
-    print(f"{B}The data has been written to {os.getcwd()}\\{OUTPUT}{END}")
-    sleep(1)
-
-    print(f"\n{Y}END OF PROGRAM{END}")
+    def __init__(self, response):
+        if "error" in response:
+            self.body = response["error"]
+            self.message = response['error']['error_msg']
+        if "execute_errors" in response:
+            self.message = response["execute_errors"]
+            self.body = response
+        super().__init__(response)
 
 
 def authorize(discard_token):
     """
-    Either opens a saved token file to be used in requests or calls get_token()
-    to obtain a new one.
+    Either reads a token from a file or calls get_token() to obtain a new one.
+    Typically a token expires in 24 hours (86400 s).
+
     @return: Dictionary of authorization parameters
     """
 
     clear_screen()
 
     print(f"{Y}Authorization...\n{END}")
-    sleep(1)
+    sleep(0.5)
 
     try:
         # checks if the token was saved more that 23h 50m ago
@@ -107,7 +72,7 @@ def authorize(discard_token):
             with open("token.dat", "rb") as f:
                 data = pickle.load(f)
             print(f"{G}AUTHORIZED FROM A SAVED TOKEN{END}")
-            sleep(2)
+            sleep(1)
 
             return {"v": 5.103, "access_token": data}
         else:
@@ -136,19 +101,69 @@ def display_title():
     print("\n")
     print("\t\t********************************************************")
     print("\t\t***                    Spy Game                      ***")
-    print("\t\t***      Course work for Netology Python course      ***")
+    print("\t\t***      Coursework for Netology Python course      ***")
     print("\t\t***               By Roman Vlasenko                  ***")
     print("\t\t********************************************************")
 
     print(f"\n{U}Goal: Find and print every VK group which member the user is, but his friends are not.{END}\n")
 
 
+def find_common(user_groups, user_friends, amount):
+    """
+    For every group from the user groups list, ckecks if any of the user's friends is a member the group.
+    If true, appends this group to a list of common groups.
+
+    @param user_groups: List of user groups IDs
+    @param user_friends: List of user friends IDs
+    @param amount: Amount of friends IDs which will be sent with every request to the API method
+    @return: Set of common groups IDs
+    """
+
+    common_groups = set()
+
+    for gindex, group in enumerate(user_groups, start=1):
+        sleep(0.3)
+        # status bar
+        processed = 0
+        print(f"{B}Group {gindex}/{len(user_groups)}, "
+              f"friends processed: {processed}/{len(user_friends)}    {END}", end="\r")
+
+        for friends_chunk in get_chunk(user_friends, amount):
+            sleep(0.2)
+            # "user_ids" parameters must be a list of comma-separated numbers
+            user_ids = ",".join([str(friend) for friend in friends_chunk])
+            params = dict(**token, group_id=group, user_ids=user_ids)
+
+            try:
+                response = make_request("/groups.isMember", params).json()
+
+                # update status bar
+                processed += len(friends_chunk)
+                print(f"{B}Group {gindex}/{len(user_groups)}, "
+                      f"friends processed: {processed}/{len(user_friends)}    {END}", end="\r")
+
+                if "response" not in response:
+                    raise APIError(response)
+            except APIError as error:
+                print(f"{R}API Error:{END}", error.message)
+                log.append(error.body)
+            else:
+                # if any friend in the chunk is a member, add the group to the set
+                # and get to the next chunk of friends
+                for response in response["response"]:
+                    if response["member"]:
+                        common_groups.add(group)
+                        break
+
+    return common_groups
+
+
 def fetch_uncommon_info(uncommon_groups):
     """
     Retrieves information about user groups, which don't have any of the user's friends for a member.
 
-    @param uncommon_groups: A list of groups IDs
-    @return: Dictionary containing a name, an ID and a member's count for every uncommon group
+    @param uncommon_groups: A set of groups IDs
+    @return: Dictionary containing a name, an ID and a members count for every uncommon group
     """
 
     groups_info = []
@@ -160,10 +175,12 @@ def fetch_uncommon_info(uncommon_groups):
         print(f"{B}Groups processed: {gindex}/{len(uncommon_groups)}  {END}", end="\r")
 
         try:
-            response = requests.get(API_URL + "/groups.getById", params=params).json()
-            assert "response" in response, f"{response['error']['error_msg']}"
-        except AssertionError as error:
-            print(f"{R}API Error:{END}", error)
+            response = make_request("/groups.getById", params).json()
+            if "response" not in response:
+                raise APIError(response)
+        except APIError as error:
+            print(f"{R}API Error:{END}", error.message)
+            log.append(error.body)
         else:
             name, gid, members_count = response["response"][0]["name"], \
                                        response["response"][0]["id"], \
@@ -176,10 +193,9 @@ def fetch_uncommon_info(uncommon_groups):
 
 def fetch_user_info(user):
     """
-    Sends a request to the API to obtain user info: name, id,
-    list of friends and list of groups. Prints out user's name and ID.
+    Obtains user info: name, id, list of friends and list of groups. Prints out user's name and ID.
 
-    @param user: User's ID or a screen name from input
+    @param user: User ID or a screen name from input
     @return: List of user friends IDs, list of user groups IDs
     """
 
@@ -187,67 +203,30 @@ def fetch_user_info(user):
     var user = API.users.get({"user_ids": """+f'"{user}"'+"""});
     var user_id = user[0].id;
     var name = user[0].first_name + " " + user[0].last_name;
-    var groups = API.groups.get({"user_id": user_id}).items;
+    var groups = API.groups.get({"user_id": user_id, "count": 1000}).items;
     var friends = API.friends.get({"user_id": user_id}).items;
 
     return {"user_name": name, "user_id": user_id, "friends_ids": friends, "groups_ids": groups};"""
+    params = dict(**token, code=code)
+
     # request user info using VKScript code above
     try:
-        response = requests.get(API_URL + "/execute", params=dict(**token, code=code)).json()
-        assert "response" in response, f"{response['error']['error_msg']}"
-    except AssertionError as error:
-        print(f"{R}API Error:{END}", error)
+        response = make_request("/execute", params).json()
+        if ("execute_errors" in response) or ("response" not in response):
+            raise APIError(response)
+    except APIError as error:
+        print(f"{R}API Error:{END}", error.message)
+        log.append(error.body)
+        print(f"\n{Y}PROGRAM TERMINATED{END}")
         quit()
     else:
         user_name, user_id, user_friends, user_groups = response["response"].values()
 
-        print(B + f"Name: {user_name}" + END)
-        print(B + f"ID: {user_id}" + END)
+        print(f"{B}Name: {user_name}{END}")
+        print(f"{B}ID: {user_id}{END}")
         sleep(2)
 
         return user_groups, user_friends
-
-
-def find_common(user_groups, user_friends, amount):
-    """
-    For every group from the user groups list, ckecks if any of the user's friends is a member the group.
-    If true, appends this group to a list of common groups.
-
-    @param user_groups: List of user groups IDs
-    @param user_friends: List of user friends IDs
-    @param amount: Amount of friends IDs which will be sent with every request to the API method
-    @return: List of common groups IDs
-    """
-
-    common_groups = []
-
-    for gindex, group in enumerate(user_groups, start=1):
-        processed = 0
-        for friends_chunk in get_chunk(user_friends, amount):
-            sleep(0.2)
-            # "user_ids" parameters must be a list of comma-separated numbers
-            user_ids = ",".join([str(friend) for friend in friends_chunk])
-            payload = dict(**token, group_id=group, user_ids=user_ids)
-            # status bar
-            processed += len(friends_chunk)
-            print(f"{B}Group {gindex}/{len(user_groups)}, "
-                  f"friends processed: {processed}/{len(user_friends)}  {END}", end="\r")
-
-            try:
-                response = requests.post(API_URL + "/groups.isMember", data=payload).json()
-                assert "response" in response, (f"{response['error']['error_msg']}", response["error"])
-            except AssertionError as error:
-                print(f"{R}API Error: {END}", error.args[0][0])
-                log.append(error.args[0][1])
-            else:
-                # if any friend in the chunk is a member, add the group to a list
-                # and get to the next chunk of friends
-                for response in response["response"]:
-                    if response["member"]:
-                        common_groups.append(group)
-                        break
-
-    return common_groups
 
 
 def get_chunk(friendlist, amount):
@@ -256,7 +235,7 @@ def get_chunk(friendlist, amount):
     by the find_common() function ("user_ids" field).
 
     @param friendlist: List of friends IDs
-    @param amount: Aomunt of items the chunk (50 by default, could be changed with a command line argument)
+    @param amount: Amunt of items the chunk (default 50, could be changed with a command line argument)
     """
 
     for index in range(0, len(friendlist), amount):
@@ -266,15 +245,18 @@ def get_chunk(friendlist, amount):
 def get_token(discard_token):
     """
     Establishes an OAuth2 session to retrieve a token for further API requests.
-    Saves retrieved token to a file unless a command line argument "--discard_token" is given
+    Saves retrieved token to a file unless a command line argument "--discard_token" is given.
+
     @return: Dictionary of authorization parameters
     """
-
+    print(f"{B}Authorization required!\nAllow 'Netology Project 1 by Roman Vlasenko' access "
+          f"to your VK account\nand copy the contents of the address bar from the opened tab{END}\n")
+    sleep(7)
     with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID), redirect_uri=REDIRECT_URI,
                        scope="friends, groups") as vk:
         authorization_url, state = vk.authorization_url(AUTHORIZE_URL)
         webbrowser.open_new_tab(authorization_url)
-        vk_response = input("Enter VK token response:\n").rstrip()
+        vk_response = input(f"{B}Paste the contents of the address bar here:{END}\n").rstrip()
         vk.token_from_fragment(vk_response)
 
     if not discard_token:
@@ -287,14 +269,49 @@ def get_token(discard_token):
 def logger(errors):
     """
     Creates a log file at the end of the program.
-    @param errors: List of dictionaries, containing error information returned from the API
+
+    @param errors: List of errors catched during the execution of the program
     """
+
     if len(errors) < 1:
-        errors.append("No errors occured during the execution")
+        errors.append("No errors were catched during the execution")
+
     with open(LOG, "w", encoding="utf-8") as f:
-        for error in errors:
-            json.dump(error, f, indent=2)
+        for errindex, error in enumerate(errors, start=1):
+            f.write(f"Entry {errindex}".center(20, "="))
             f.write("\n")
+            json.dump(error, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+
+
+def make_request(method, payload):
+    """
+    Sends a request to the API, raises ReadTimeout if unable to fetch data after 3 attempts.
+
+    @param method: API method
+    @param payload: Dictionary of method parameters
+    @return: Response object
+    """
+
+    retry_counter = 0
+    api_response = None
+
+    while api_response is None and (retry_counter < RETRY):
+        try:
+            if method == "/groups.isMember":
+                api_response = requests.post(API_URL + method, data=payload, timeout=(10, 5))
+            else:
+                api_response = requests.get(API_URL + method, params=payload, timeout=(10, 5))
+        except requests.exceptions.ReadTimeout as error:
+            print("Server stopped responding. Retry in 3 s...")
+            log.append(error.args[0].args[0])
+            retry_counter += 1
+            sleep(3)
+
+    if api_response is None:
+        raise requests.exceptions.ReadTimeout("Unable to retrieve data")
+
+    return api_response
 
 
 def parse_arguments():
@@ -302,7 +319,7 @@ def parse_arguments():
     Parses command line arguments using argparse module.
     @return: Amount of friends IDs which will be sent with every request to the API method in find_common()
     @return: Boolean value to switch off token pickling option in get_token()
-    @return: Boolean value to switch on log writing option (see logger())
+    @return: Boolean value to switch on logging option (see logger())
     """
 
     parser = argparse.ArgumentParser()
@@ -330,11 +347,68 @@ def print_and_write(groups_info):
     for group in groups_info:
         print(f"{B}Group name: {group['name']}{END}")
         print(f"{B}Group ID: {group['gid']}{END}")
-        print(f"{B}Members count: {group['members_count']}\n{END}")
+        print(f"{B}Members count: {group['members_count']}{END}\n")
         sleep(0.2)
 
     with open(OUTPUT, "w", encoding="utf-8") as file:
         json.dump(groups_info, file, indent=2, ensure_ascii=False)
+
+
+def main(chunk_size):
+    # chunk is the amount of IDs sent with every request in find_common()
+    if not chunk_size:
+        chunk_size = 50
+
+    clear_screen()
+    display_title()
+
+    # retrieve user info
+    user = input(f"{Y}Enter user ID/screen name (or type q to quit):{END}\n")
+    if user == "q":
+        quit()
+    print(f"\n{Y}Retrieving user info...{END}\n")
+    sleep(1)
+
+    user_groups, user_friends = fetch_user_info(user)
+
+    # find common groups
+    print(f"\n{Y}Fetching common groups...{END}")
+    sleep(2)
+    print(f"{B}Status:{END} {Y}In progress{END}\n")
+    sleep(1)
+
+    common_groups = find_common(user_groups, user_friends, chunk_size)
+
+    print(f"\n\n{B}Status:{END} {G}Successful{END}\n")
+    sleep(2)
+
+    # find uncommon groups
+    print(f"{Y}Calculating difference...{END}")
+    sleep(1)
+
+    uncommon_groups = set(user_groups) - common_groups
+
+    print(f"{G}UNCOMMON GROUPS FOUND: {len(uncommon_groups)}{END}\n")
+    sleep(2)
+
+    # fetch uncommon groups info
+    print(f"{Y}Fetching uncommon groups info...{END}")
+    sleep(2)
+    print(f"{B}Status:{END} {Y}In progress{END}\n")
+    sleep(1)
+
+    uncommon_groups_info = fetch_uncommon_info(uncommon_groups)
+
+    print(f"\n\n{B}Status:{END} {G}Successful{END}\n")
+    sleep(2)
+
+    # display retrieved info and write it to a JSON file
+    print_and_write(uncommon_groups_info)
+
+    print(f"{B}Saved to {os.getcwd()}\\{OUTPUT}{END}")
+    sleep(1)
+
+    print(f"\n{Y}END OF PROGRAM{END}")
 
 
 if __name__ == '__main__':
@@ -342,8 +416,10 @@ if __name__ == '__main__':
 
     chunk, cache, debug = parse_arguments()
     token = authorize(cache)
-    main(chunk)
 
-    if debug:
-        logger(log)
-        print(f"\n{B}Log file has been saved to {os.getcwd()}\\{LOG}{END}")
+    try:
+        main(chunk)
+    finally:
+        if debug:
+            logger(log)
+            print(f"\n{B}Log file has been saved to {os.getcwd()}\\{LOG}{END}")
