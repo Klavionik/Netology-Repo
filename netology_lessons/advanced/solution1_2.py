@@ -38,16 +38,15 @@ class JSONIterator:
 def md5_hash_gen(filename):
     hash_point = hashlib.md5()
     with open(filename, 'rb') as fhandle:
-        file = fhandle.read()
-    for line in file:
-        hash_point.update(bytes(line))
-        yield hash_point.hexdigest()
+        for line in fhandle:
+            hash_point.update(bytes(line))
+            yield hash_point.hexdigest()
 
 
 if __name__ == '__main__':
-    json_fname = input("Enter a JSON filename:\n")
-    json_gen = JSONIterator(json_fname)
-    json_gen.process()
+    # json_fname = input("Enter a JSON filename:\n")
+    # json_gen = JSONIterator(json_fname)
+    # json_gen.process()
 
     fname = input("Enter a filename:\n")
     hash_gen = md5_hash_gen(fname)
