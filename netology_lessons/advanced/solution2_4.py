@@ -61,22 +61,22 @@ def find_by_date(database, start, end):
 
 if __name__ == '__main__':
 
-    # read_data('resources/artists.csv')
-    # print("Данные импортированы!\n")
-    #
-    # for event in find_cheapest(db):
-    #     print(f'{event["Исполнитель"]}, '
-    #           f'{event["Место"]}, '
-    #           f'Цена {event["Цена"]}, '
-    #           f'{datetime.strftime(event["Дата"], "%d %B %Y")}')
-    #
-    # artist = input("\nВведите название артиста для поиска\n")
-    #
-    # for event in find_by_name(artist, db):
-    #     print(f'{event["Исполнитель"]}, '
-    #           f'{event["Место"]}, '
-    #           f'Цена {event["Цена"]}, '
-    #           f'{datetime.strftime(event["Дата"], "%d %B %Y")}')
+    read_data('resources/artists.csv')
+    print("Данные импортированы!\n")
+    
+    for event in find_cheapest(db):
+        print(f'{event["Исполнитель"]}, '
+              f'{event["Место"]}, '
+              f'Цена {event["Цена"]}, '
+              f'{datetime.strftime(event["Дата"], "%d %B %Y")}')
+    
+    artist = input("\nВведите название артиста для поиска\n")
+    
+    for event in find_by_name(artist, db):
+        print(f'{event["Исполнитель"]}, '
+              f'{event["Место"]}, '
+              f'Цена {event["Цена"]}, '
+              f'{datetime.strftime(event["Дата"], "%d %B %Y")}')
 
     date1 = input('\nВведите дату начала поиска в формате дд.мм.гггг\n')
     date2 = input('\nВведите дату окончания поиска в формате дд.мм.гггг\n')
