@@ -28,3 +28,27 @@ class Stack:
         return self.stack[self.size() - 1] if self.size() else None
 
 
+def is_balanced(brackets):
+    stack = Stack()
+    for bracket in brackets:
+        if bracket in '([{':
+            stack.push(bracket)
+        else:
+            if not stack.size():
+                return "Несбалансированно"
+            top = stack.pop()
+            if (top == '(' and bracket != ')') or \
+                    (top == '[' and bracket != ']') or \
+                    (top == '{' and bracket != '}'):
+                return "Сбалансированно"
+    return "Сбалансированно"
+
+
+def main(text):
+    result = is_balanced(text)
+    print(result)
+
+
+if __name__ == '__main__':
+    string = input("Введите скобочки!")
+    main(string)
