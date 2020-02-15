@@ -13,6 +13,7 @@ class User:
         self.interests = None
         self.personal = None
         self.groups = None
+
         self._set_info(info)
         self._set_interests(interests)
         self._set_personal(personal)

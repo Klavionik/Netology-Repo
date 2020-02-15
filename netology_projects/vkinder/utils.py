@@ -1,5 +1,27 @@
 import re
 from datetime import datetime
+from netology_projects.vkinder.globals import photo_sizes
+
+
+def cleanup(text):
+    special_characters = re.compile(r'[\"^;!/|()«»]', re.IGNORECASE)
+    newline = re.compile(r'\n')
+    no_spec_char = special_characters.sub('', text)
+    no_newlines = newline.sub(',', no_spec_char)
+    final = [key.lower().strip() for key in no_newlines.split(',')]
+
+    return final
+
+
+def common(iterable1, iterable2):
+    return len(set(iterable1) & set(iterable2))
+
+
+def find_largest_photo(links):
+    def size_type_to_int(size):
+        return photo_sizes[size]
+
+    return sorted(links, key=lambda x: size_type_to_int(x['type']), reverse=True)[0]['url']
 
 
 def flatten(d):
@@ -38,7 +60,7 @@ def verify_bday(value):
         return verification
 
 
-def next_ids(ids, amount=25):
+def next_ids(ids, amount=12):
     """
     Splits a list of matches ids in chunks of 25.
 
