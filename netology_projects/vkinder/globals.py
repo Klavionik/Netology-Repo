@@ -55,9 +55,16 @@ user_attr_map = {'id': 'uid',
 # VK user object item attributes -> :class: Match attributes mapping
 match_attr_map = {**user_attr_map, 'common_friends': 'common_friends'}
 
+# VK photo sizes map (from biggest to smallest)
+photo_sizes = {'w': 9, 'z': 8, 'y': 7, 'r': 6, 'q': 5, 'p': 4, 'o': 3, 'x': 2, 'm': 1, 's': 0}
+
 # Measures schema:
-# mandatory: sex > age > city
-# optional: common interests > personal > common friends > common groups
+# mandatory: sex = age = city
+# optional: personal > common interests > common friends > common groups
+personal_factor = 50
+interests_factor = 30
+friends_factor = 15
+groups_factor = 5
 
 # Age bound
 age_bound = 3

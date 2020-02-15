@@ -30,7 +30,7 @@ def get_token(save):
     print('We need to authorize you with VK\n')
 
     with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID), redirect_uri=REDIRECT_URI,
-                       scope="friends, groups") as vk:
+                       scope="friends, groups, offline, photos") as vk:
         authorization_url, state = vk.authorization_url(AUTHORIZE_URL)
 
         driver.get(authorization_url)

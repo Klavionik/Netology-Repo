@@ -15,7 +15,7 @@ VKInder: a coursework for Netology Python course by Roman Vlasenko\n
 
 class App:
 
-    def __init__(self, owner_id, token, target):
+    def __init__(self, owner_id, token, target=15151961):
         """
         Initializes an instance of the VKInder app from a VK user id, a VK API token and a target id or screenname.
 
@@ -28,6 +28,9 @@ class App:
         self.api = API_URL
         self.v = VERSION
         self.auth = {'v': self.v, 'access_token': self.token}
+
+        if not target:
+            target = input("Let's find somebody's fortune! But first, enter their ID below.\n")
 
         self.current_user = self._set_user(target)
         self.matches = self._spawn_matches()
@@ -74,24 +77,29 @@ class App:
     def _prepare_code(ids):
         code = \
             """
-                var ids = """ + f'{ids}' + """;
+            var ids = """ + f'{ids}' + """;
             var count = """ + f'{len(ids)}' + """;
             var index = 0;
             var all_groups = [];
-            var next = 0;
+            var all_photos = [];
             var groups = null;
+            var photos = null;
+            var next = 0;
+
 
             while (count > 0) {
 
                 next = ids[index];
                 groups = API.groups.get({"user_id": next, "count": 1000}).items;
+                photos = API.photos.get({'owner_id': next, 'album_id': -6, 'rev': 1, 'extended': 1}).items;
+                all_photos.push(photos);
                 all_groups.push(groups);
                 count = count - 1;
                 index = index + 1;
             };
 
 
-            return all_groups;
+            return [all_groups, all_photos];
         """
 
         return code
@@ -109,7 +117,7 @@ class App:
 
         return possible_matches
 
-    def _get_matches_groups(self, matches_ids):
+    def _get_matches_groups_photos(self, matches_ids):
         """
         Loops through a list of final matches ids and gets groups info for all the
         matches.
@@ -122,17 +130,30 @@ class App:
         and then concatenate all results in a variable `matches_groups`.
 
         :param matches_ids: list of final matches ids
-        :return: list os final matches groups
+        :return: list of final matches groups
         """
         matches_groups = []
+        matches_photos = []
 
         for ids_chunk in utils.next_ids(matches_ids):
             code = self._prepare_code(ids_chunk)
-            groups = api.execute(self.auth, code=code)
+            result = api.execute(self.auth, code=code)
+            groups, photos = result[0], result[1]
             matches_groups.extend(groups)
+            matches_photos.extend(photos)
             sleep(0.2)
 
-        return matches_groups
+        return matches_groups, matches_photos
+
+    def _get_top3_photos(self, photos_array):
+        processed_photos = []
+
+        for photo in photos_array:
+            processed_photo = {'likes': photo['likes']['count'], 'link': utils.find_largest_photo(photo['sizes'])}
+            processed_photos.append(processed_photo)
+
+        return sorted(processed_photos, key=lambda x: x['likes'], reverse=True)[:3]
+
 
     def _prepare_matches(self):
         """
@@ -146,9 +167,9 @@ class App:
 
         matches_ids = self._get_matches_ids(possible_matches)
         matches_info = api.users_get(self.auth, user_ids=matches_ids, fields=req_fields)
-        matches_groups = self._get_matches_groups(matches_ids)
+        matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
 
-        return matches_info, matches_groups
+        return matches_info, matches_groups, matches_photos
 
     def _spawn_matches(self):
         """
@@ -160,13 +181,18 @@ class App:
 
         print("Please, wait a minute while we're collecting data\n")
 
-        matches_info, matches_groups = self._prepare_matches()
+        matches_info, matches_groups, matches_photos = self._prepare_matches()
 
         matches = []
 
-        for match_info, match_groups in zip(matches_info, matches_groups):
+        for match_info, match_groups, match_photos in zip(matches_info, matches_groups, matches_photos):
             info, personal, interests = self._parse_match(match_info)
-            matches.append(Match(info, personal, interests, match_groups))
+            top3_photos = self._get_top3_photos(match_photos)
+            match_object = Match(info, personal, interests, match_groups, top3_photos)
+            match_object.scoring(self.current_user)
+            matches.append(match_object)
+
+        matches.sort(key=lambda x: x.total_score, reverse=True)
 
         print(f'{len(matches)} possible matches found!\n')
 
@@ -277,9 +303,7 @@ if __name__ == '__main__':
     startup()
 
     app_token, app_owner = authorize()
-    target_name = input("Let's find somebody's fortune! But first, enter their ID below.\n")
 
-    app = App(app_owner, app_token, target_name)
+    app = App(app_owner, app_token)
 
-    while True:
-        pass
+    y = 1
