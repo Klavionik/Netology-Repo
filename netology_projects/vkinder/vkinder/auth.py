@@ -7,11 +7,8 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 
-from netology_projects.vkinder.exceptions import APIError
-from netology_projects.vkinder.globals import *
-
-TOKEN_FILE = os.path.join(data, 'token.dat')
-USER_AGENT = 'VKInder/0.1 (Windows NT 10.0; Win64; x64)'
+from netology_projects.vkinder.vkinder.exceptions import APIError
+from netology_projects.vkinder.vkinder.globals import *
 
 # keeps Selenium from opening up a browser window and adds custom user-agent
 chrome_options = Options()
@@ -19,17 +16,20 @@ chrome_options.add_argument("--headless")
 chrome_options.add_argument(f'--user-agent={USER_AGENT}')
 driver = webdriver.Chrome(CHROMEDRIVER, chrome_options=chrome_options)
 
+allow_button = r'//*[@id="oauth_wrap_content"]/div[3]/div/div[1]/button[1]'
+
 
 def get_token(save):
     """
     Establishes an OAuth2 session to retrieve a token for further API requests.
     Saves retrieved token to a file.
 
-    :return: Dictionary of authorization parameters
+    :return: VK API token as a string
     """
     print('We need to authorize you with VK\n')
 
-    with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID), redirect_uri=REDIRECT_URI,
+    with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID),
+                       redirect_uri=REDIRECT_URI,
                        scope="friends, groups, offline, photos") as vk:
         authorization_url, state = vk.authorization_url(AUTHORIZE_URL)
 
@@ -46,7 +46,7 @@ def get_token(save):
         except NoSuchElementException:
             pass
         try:
-            allow = driver.find_element_by_xpath('//*[@id="oauth_wrap_content"]/div[3]/div/div[1]/button[1]')
+            allow = driver.find_element_by_xpath(allow_button)
             allow.click()
         except NoSuchElementException:
             pass
@@ -61,18 +61,35 @@ def get_token(save):
 
 
 def open_token():
-    with open(TOKEN_FILE, "rb") as f:
+    """
+    Reads VK API token from a saved file.
+    :return: VK API token as a string
+    """
+    with open(tokenpath, "rb") as f:
         token = pickle.load(f)
 
     return token
 
 
 def save_token(token):
-    with open(TOKEN_FILE, "wb") as f:
+    """
+    Saves VK API token to a file.
+    :param token: VK API token as a string
+    """
+    with open(tokenpath, "wb") as f:
         pickle.dump(token, f)
 
 
 def authorize(save=True):
+    """
+    Handles authorization process at the start of the application.
+    Tries to read token from a file and if it fails, runs get_token()
+    to obtain a new token from a user.
+
+    :param save: Boolean value, False if you don't want the app
+    to save the token to a file.
+    :return: Tuple (token string, token owner id int)
+    """
     user_id = None
 
     try:
@@ -80,11 +97,14 @@ def authorize(save=True):
     except FileNotFoundError:
         token = get_token(save)
 
+    # make a test request to the API, quit if error occured
     try:
-        test_response = requests.get(API_URL + users_api.get, params={'v': VERSION, 'access_token': token}).json()
+        params = {'v': VERSION, 'access_token': token}
+        test_response = requests.get(API_URL + '/users.get', params).json()
         if 'response' not in test_response:
             raise APIError(test_response)
-        first_name, last_name = test_response['response'][0]['first_name'], test_response['response'][0]['last_name']
+        first_name = test_response['response'][0]['first_name']
+        last_name = test_response['response'][0]['last_name']
         user_id = test_response['response'][0]['id']
         print(f"User: {first_name} {last_name}")
     except APIError as error:

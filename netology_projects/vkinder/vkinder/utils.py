@@ -1,9 +1,21 @@
 import re
 from datetime import datetime
-from netology_projects.vkinder.globals import photo_sizes
+from netology_projects.vkinder.vkinder.globals import photo_sizes
 
 
 def cleanup(text):
+    """
+    Takes a given text and processes it to prepare for match scoring.
+
+    1) Removes meaningless characters from the text
+    2) Replaces all occurences of a newline with a comma
+    3) Splits the text using comma as a delimiter
+    4) Converts every string of the splitted text for lowercase
+    and removes whitespace characters on both ends of a string
+
+    :param text: Text string
+    :return: List of strings
+    """
     special_characters = re.compile(r'[\"^;!/|()«»]', re.IGNORECASE)
     newline = re.compile(r'\n')
     no_spec_char = special_characters.sub('', text)
@@ -14,10 +26,24 @@ def cleanup(text):
 
 
 def common(iterable1, iterable2):
+    """
+    Takes two iterable objects and returns the number of their common objects.
+
+    :param iterable1: An iterable object
+    :param iterable2: An iterable object
+    :return: int
+    """
     return len(set(iterable1) & set(iterable2))
 
 
 def find_largest_photo(links):
+    """
+    Given the 'sizes' array of a VK API `Photo` object, returns a
+    link to the largest photo in the array.
+
+    :param links: `Sizes` array (a list of dicts)
+    :return: Largest photo url (a string)
+    """
     def size_type_to_int(size):
         return photo_sizes[size]
 
@@ -62,7 +88,7 @@ def verify_bday(value):
 
 def next_ids(ids, amount=12):
     """
-    Splits a list of matches ids in chunks of 25.
+    Splits a list of matches ids in chunks.
 
     :param ids: List of matches ids
     :param amount: Amount of ids yielded per iteration
@@ -73,10 +99,10 @@ def next_ids(ids, amount=12):
 
 def get_usr_age(bday):
     """
-    Takes a user's birth date and returns their age.
+    Takes the current user's birth date and returns their age.
 
-    :param bday: birth date formatted as d.m.yyyy
-    :return: exact user age
+    :param bday: Birth date formatted as d.m.yyyy
+    :return: Exact user age
     """
     if not verify_bday(bday):
         bday = input('\nBirth date is incomplete or incorrect.'

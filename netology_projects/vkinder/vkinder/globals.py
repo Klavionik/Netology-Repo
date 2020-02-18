@@ -1,37 +1,32 @@
 import os
-from collections import namedtuple
 
-# namedtuples to store VK API methods
-UsersMethods = namedtuple('Users', 'get search')
-GroupsMethods = namedtuple('Groups', 'get')
-OtherMethods = namedtuple('Others', 'getcities execute')
-
-# App client ID
+# App
+# client ID
 CLIENT_ID = os.environ['CLIENT_ID']
-
-# Chrome driver path for Selenium
+# user-agent
+USER_AGENT = 'VKInder/0.1 (Windows NT 10.0; Win64; x64)'
+# chrome driver path for Selenium
 CHROMEDRIVER = os.environ['CHROMEDRIVER']
 
-# General VK API constants
+# VK API general
 API_URL = "https://api.vk.com/method"
 AUTHORIZE_URL = 'https://oauth.vk.com/authorize'
 REDIRECT_URI = 'https://oauth.vk.com/blank.html'
 VERSION = 5.103
 
-# VK API methods
-users_api = UsersMethods(get='/users.get', search='/users.search')
-groups_api = GroupsMethods(get='/groups.get')
-others_api = OtherMethods(getcities='/database.getCities', execute='/execute')
-
-# Root and data directories
-root = os.path.dirname(os.path.abspath(__file__))
+# Directories paths
+root = os.path.dirname(os.pardir)
 data = os.path.join(root, 'data')
 resources = os.path.join(root, 'resources')
+# Serialized token path
+tokenpath = os.path.join(data, 'token.dat')
+# SQLite database path
+dbpath = f'sqlite:///{os.path.join(data, "vkinder.db")}'
 
-# required fields for users.get method
+# required fields for main.App._set_user method
 req_fields = 'bdate,city,sex,common_count,games,music,movies,interests,tv,books,personal'
 
-# VK user object item fields -> :class: User attributes mapping
+# VK user object item fields -> :class:`User` attributes mapping
 user_attr_map = {'id': 'uid',
                  'first_name': 'name',
                  'last_name': 'surname',
@@ -52,19 +47,18 @@ user_attr_map = {'id': 'uid',
                  'personal.alcohol': 'personal.alcohol'
                  }
 
-# VK user object item attributes -> :class: Match attributes mapping
+# VK user object item attributes -> :class:`Match` attributes mapping
 match_attr_map = {**user_attr_map, 'common_friends': 'common_friends'}
 
 # VK photo sizes map (from biggest to smallest)
 photo_sizes = {'w': 9, 'z': 8, 'y': 7, 'r': 6, 'q': 5, 'p': 4, 'o': 3, 'x': 2, 'm': 1, 's': 0}
 
-# Measures schema:
-# mandatory: sex = age = city
-# optional: personal > common interests > common friends > common groups
-personal_factor = 50
-interests_factor = 30
-friends_factor = 15
-groups_factor = 5
+# Optional measures:
+# personal > common interests > common friends > common groups
+PERSONAL_FACTOR = 50
+INTERESTS_FACTOR = 30
+FRIENDS_FACTOR = 15
+GROUPS_FACTOR = 5
 
 # Age bound
-age_bound = 3
+AGE_BOUND = 3
