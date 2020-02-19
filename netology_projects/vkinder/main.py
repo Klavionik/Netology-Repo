@@ -2,14 +2,15 @@
 VKInder: a coursework for Netology Python course by Roman Vlasenko
 
 """
-
+import json
 from time import sleep
+
 import netology_projects.vkinder.vkinder.api as api
 import netology_projects.vkinder.vkinder.utils as utils
 from netology_projects.vkinder.vkinder.auth import authorize
+from netology_projects.vkinder.vkinder.db import AppDB, db_session
 from netology_projects.vkinder.vkinder.globals import *
 from netology_projects.vkinder.vkinder.types import User, Match
-from netology_projects.vkinder.vkinder.db import VKinderDB
 
 
 class App:
@@ -27,7 +28,7 @@ class App:
         self.api = API_URL
         self.v = VERSION
         self.auth = {'v': self.v, 'access_token': self.token}
-        self.db = VKinderDB(dbpath)
+        self.db = AppDB(dbpath)
 
         if not target:
             target = input("Let's find somebody's fortune! "
@@ -35,6 +36,7 @@ class App:
 
         self.current_user = self._set_user(target)
         self.matches = self._spawn_matches()
+        self.next_match(self.current_user.uid, 10)
 
     def _set_user(self, target):
         """
@@ -47,11 +49,22 @@ class App:
         user_info = api.users_get(self.auth, user_ids=target, fields=req_fields)
         target_id = user_info[0]['id']
 
+        with db_session(self.db.factory) as session:
+            user_from_db = self.db.get_user(target_id, session)
+            if user_from_db:
+                load = input('Load user info from the database? y/n\n')
+                if load == 'y':
+                    user = User.from_database(user_from_db)
+                    print(f'\n{user} loaded from the database')
+                    return user
+
         user_groups = api.groups_get(self.auth, user_id=target_id)['items']
         info, personal, interests = self._parse_user(user_info[0])
         user = User(info, personal, interests, user_groups)
 
-        self.db.add_user(user)
+        with db_session(self.db.factory) as session:
+            self.db.add_user(user, session)
+
         return user
 
     @staticmethod
@@ -94,6 +107,19 @@ class App:
             code = f.read()
 
         return code % (ids, len(ids))
+
+    def next_match(self, user_id, count):
+        with db_session(self.db.factory) as session:
+            top10_matches = self.db.pop_match(user_id, count, session)
+
+        if top10_matches:
+            path = os.path.join(data, f'{user_id}_matches.json')
+            with open(path, 'w', encoding='utf8') as f:
+                json.dump(top10_matches, f, indent=2)
+
+            return True
+
+        return None
 
     def _get_possible_matches(self, search_criteria):
         """
@@ -188,16 +214,16 @@ class App:
         matches_info, matches_groups, matches_photos = self._prepare_matches()
 
         matches = []
+        with db_session(self.db.factory) as session:
+            for match_info, match_groups, match_photos in \
+                    zip(matches_info, matches_groups, matches_photos):
+                info, personal, interests = self._parse_match(match_info)
+                top3_photos = self._get_top3_photos(match_photos)
+                match_object = Match(info, personal, interests, match_groups, top3_photos)
+                match_object.scoring(self.current_user)
+                matches.append(match_object)
 
-        for match_info, match_groups, match_photos in \
-                zip(matches_info, matches_groups, matches_photos):
-            info, personal, interests = self._parse_match(match_info)
-            top3_photos = self._get_top3_photos(match_photos)
-            match_object = Match(info, personal, interests, match_groups, top3_photos)
-            match_object.scoring(self.current_user)
-            matches.append(match_object)
-
-            self.db.add_match(match_object, top3_photos, self.current_user.uid)
+                self.db.add_match(match_object, top3_photos, self.current_user.uid, session)
 
         print(f'{len(matches)} matches found!\n')
 
@@ -218,19 +244,20 @@ class App:
         parsed_personal = {}
         parsed_interests = {}
 
-        for vk_field, cls_attr in user_attr_map.items():
-            attr = flat_info.get(vk_field, None)
-            if not attr or attr == bad_value:
-                attr = self._ask_for_attribute(cls_attr)
-            if vk_field == 'bdate':
-                attr = utils.get_usr_age(attr)
+        for category, mapping in user_map.items():
+            for vk_field, cls_attr in mapping.items():
+                attr = flat_info.get(vk_field, None)
+                if not attr or attr == bad_value:
+                    attr = self._ask_for_attribute(cls_attr)
+                if vk_field == 'bdate':
+                    attr = utils.get_usr_age(attr)
 
-            if cls_attr.startswith('personal.'):
-                parsed_personal[cls_attr] = attr
-            elif cls_attr.startswith('interests.'):
-                parsed_interests[cls_attr] = attr
-            else:
-                parsed_general[cls_attr] = attr
+                if category == 'personal':
+                    parsed_personal[cls_attr] = attr
+                elif category == 'interests':
+                    parsed_interests[cls_attr] = attr
+                else:
+                    parsed_general[cls_attr] = attr
 
         return parsed_general, parsed_personal, parsed_interests
 
@@ -250,22 +277,23 @@ class App:
         parsed_personal = {}
         parsed_interests = {}
 
-        for vk_field, cls_attr in match_attr_map.items():
-            value = flat_response.get(vk_field, None)
-            if not value or value == bad_value:
-                value = None
-            if vk_field == 'bdate':
-                if not utils.verify_bday(value):
-                    value = 'Unknown'
-                else:
-                    value = utils.get_usr_age(value)
+        for category, mapping in user_map.items():
+            for vk_field, cls_attr in mapping.items():
+                value = flat_response.get(vk_field, None)
+                if not value or value == bad_value:
+                    value = None
+                if vk_field == 'bdate':
+                    if not utils.verify_bday(value):
+                        value = 'Unknown'
+                    else:
+                        value = utils.get_usr_age(value)
 
-            if cls_attr.startswith('personal.'):
-                parsed_personal[cls_attr] = value
-            elif cls_attr.startswith('interests.'):
-                parsed_interests[cls_attr] = value
-            else:
-                parsed_info[cls_attr] = value
+                if category == 'personal':
+                    parsed_personal[cls_attr] = value
+                elif category == 'intersts':
+                    parsed_interests[cls_attr] = value
+                else:
+                    parsed_info[cls_attr] = value
 
         return parsed_info, parsed_personal, parsed_interests
 

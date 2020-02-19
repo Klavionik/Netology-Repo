@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from netology_projects.vkinder.vkinder.globals import photo_sizes
+from .globals import photo_sizes
 
 
 def cleanup(text):

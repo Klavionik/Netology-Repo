@@ -1,8 +1,8 @@
 import requests
 from collections import namedtuple
 
-from netology_projects.vkinder.vkinder.exceptions import APIError
-from netology_projects.vkinder.vkinder.globals import API_URL
+from .exceptions import APIError
+from .globals import API_URL
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')

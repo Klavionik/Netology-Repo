@@ -7,8 +7,8 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 
-from netology_projects.vkinder.vkinder.exceptions import APIError
-from netology_projects.vkinder.vkinder.globals import *
+from .exceptions import APIError
+from .globals import *
 
 # keeps Selenium from opening up a browser window and adds custom user-agent
 chrome_options = Options()

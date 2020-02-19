@@ -1,46 +1,38 @@
-from collections import namedtuple
-from netology_projects.vkinder.vkinder.globals import AGE_BOUND, \
-    INTERESTS_FACTOR, PERSONAL_FACTOR, FRIENDS_FACTOR, GROUPS_FACTOR
-from netology_projects.vkinder.vkinder.utils import cleanup, common
+import pickle
+from .globals import AGE_BOUND, INTERESTS_FACTOR, \
+    PERSONAL_FACTOR, FRIENDS_FACTOR, GROUPS_FACTOR, user_map
+from .utils import cleanup, common
 
 
 class User:
 
-    def __init__(self, info, personal, interests, groups):
+    def __init__(self, general, personal, interests, groups):
         self.uid = None
         self.name = None
         self.surname = None
         self.sex = None
         self.age = None
         self.city = None
-        self.interests = None
-        self.personal = None
-        self.groups = None
+        self.interests = interests
+        self.personal = personal
+        self.groups = tuple(groups)
 
-        self._set_info(info)
-        self._set_interests(interests)
-        self._set_personal(personal)
-        self._set_groups(groups)
+        self._set_info(general)
 
     def _set_info(self, info):
         for field in info:
             if hasattr(self, field):
                 setattr(self, field, info[field])
 
-    def _set_interests(self, intrs):
-        self.interests = namedtuple('Interests',
-                                    'interests books games movies music tv')
-        for field in self.interests._fields:
-            setattr(self.interests, field, intrs[f'interests.{field}'])
-
-    def _set_personal(self, pers):
-        self.personal = namedtuple('Personal',
-                                   'political religion people_main life_main smoking alcohol')
-        for field in self.personal._fields:
-            setattr(self.personal, field, pers[f'personal.{field}'])
-
-    def _set_groups(self, groups):
-        self.groups = tuple(groups)
+    @classmethod
+    def from_database(cls, db_user):
+        general = {}
+        for _, cls_attr in user_map['general'].items():
+            general[cls_attr] = getattr(db_user, cls_attr)
+        interests = pickle.loads(db_user.interests)
+        personal = pickle.loads(db_user.personal)
+        groups = pickle.loads(db_user.groups)
+        return cls(general, personal, interests, groups)
 
     @property
     def search_criteria(self):
@@ -98,12 +90,12 @@ class Match(User):
     def _score_interests(self, model):
         interests_score = 0
 
-        for field in model.interests._fields:
-            user_field = getattr(model.interests, field)
-            match_field = getattr(self.interests, field)
-            if match_field:
-                clean_user_interest = cleanup(user_field)
-                clean_match_interest = cleanup(match_field)
+        for field in model.interests:
+            user_value = model.interests[field]
+            match_value = self.interests.get(field, None)
+            if match_value:
+                clean_user_interest = cleanup(user_value)
+                clean_match_interest = cleanup(match_value)
                 field_score = INTERESTS_FACTOR * common(clean_match_interest, clean_user_interest)
                 interests_score += field_score
         return interests_score
@@ -111,10 +103,10 @@ class Match(User):
     def _score_personal(self, model):
         personal_score = 0
 
-        for field in model.personal._fields:
-            user_field = getattr(model.personal, field)
-            match_field = getattr(self.personal, field)
-            if match_field == user_field:
+        for field in model.personal:
+            user_value = model.personal[field]
+            match_value = self.personal.get(field, None)
+            if match_value == user_value:
                 personal_score += PERSONAL_FACTOR * 1
         return personal_score
 
@@ -133,4 +125,8 @@ class Match(User):
         return groups_score
 
     def search_criteria(self):
+        pass
+
+    @classmethod
+    def from_database(cls, db_user):
         pass
