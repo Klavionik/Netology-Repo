@@ -1,8 +1,9 @@
-import requests
 from collections import namedtuple
 
-from .exceptions import APIError
-from .globals import API_URL
+import requests
+
+from vkinder.exceptions import APIError
+from vkinder.globals import API_URL
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
@@ -15,6 +16,15 @@ others_api = OtherMethods(getcities='/database.getCities', execute='/execute')
 
 
 def vkrequest(methodfunc):
+    """
+    Wraps a function that returns a response from the VK API,
+    checls if received response is correct and unpacks it.
+    Raises `requests` lib `HTTPError` if response status
+    if not `OK`.
+
+    :param methodfunc: Function that returns a response object
+    :return: Unpacked response
+    """
     def wrapper(*args, **kwargs):
         response = methodfunc(*args, **kwargs)
 

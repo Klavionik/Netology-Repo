@@ -1,28 +1,28 @@
 import pickle
-from .globals import AGE_BOUND, INTERESTS_FACTOR, \
-    PERSONAL_FACTOR, FRIENDS_FACTOR, GROUPS_FACTOR, user_map
-from .utils import cleanup, common
+from datetime import datetime
+
+from vkinder.api import get_cities
+from vkinder.globals import *
+from vkinder.utils import cleanup, common, verify_bday, flatten
 
 
 class User:
 
     def __init__(self, general, personal, interests, groups):
-        self.uid = None
-        self.name = None
-        self.surname = None
-        self.sex = None
-        self.age = None
-        self.city = None
+        self.uid = general['uid']
+        self.name = general['name']
+        self.surname = general['surname']
+        self.sex = general['sex']
+        self.age = general['age']
+        self.city = general['city']
         self.interests = interests
         self.personal = personal
         self.groups = tuple(groups)
 
-        self._set_info(general)
-
-    def _set_info(self, info):
-        for field in info:
-            if hasattr(self, field):
-                setattr(self, field, info[field])
+    @classmethod
+    def from_api(cls, info, groups, *args, **kwargs):
+        general, personal, interests = cls.parse(info)
+        return cls(general, personal, interests, groups)
 
     @classmethod
     def from_database(cls, db_user):
@@ -33,6 +33,81 @@ class User:
         personal = pickle.loads(db_user.personal)
         groups = pickle.loads(db_user.groups)
         return cls(general, personal, interests, groups)
+
+    @classmethod
+    def parse(cls, info):
+        """
+        Takes a VK API `User` object in the form of a dictionary and prepares its contents
+        in order to create a :class:`User` object.
+
+        :param info: dictionary describing a VK API `User` object
+        :return: tuple of dicts (general profile info, personal info, interests info)
+        """
+        flat_info = flatten(info)
+        bad_value = ''
+
+        parsed_general = {}
+        parsed_personal = {}
+        parsed_interests = {}
+
+        for category, mapping in user_map.items():
+            for vk_field, cls_attr in mapping.items():
+                attr = flat_info.get(vk_field, None)
+                if not attr or attr == bad_value:
+                    attr = cls.ask_for_attribute(cls_attr)
+                if vk_field == 'bdate':
+                    attr = cls.get_usr_age(attr)
+                if vk_field == 'common_friends':
+                    pass  # :class:`User` object actually doesn't need this :\
+
+                if category == 'personal':
+                    parsed_personal[cls_attr] = attr
+                elif category == 'interests':
+                    parsed_interests[cls_attr] = attr
+                else:
+                    parsed_general[cls_attr] = attr
+
+        return parsed_general, parsed_personal, parsed_interests
+
+    @classmethod
+    def ask_for_attribute(cls, attribute):
+        """
+        Handles the case, when user information is incomplete and requires clarification.
+        Displays an appropriate message, prompts for an input.
+
+        If given attribute value is a city name, sends a request to the VK API `database.getCities`
+        method in order to get a city id.
+
+        :param attribute: attribute of :class:`User`
+        :return: attribute's value
+        """
+        path = os.path.join(resources, 'output', attribute)
+        output = open(f'{path}.txt', encoding='utf8').read().strip()
+        value = input(f'\n{output}\n\n')
+
+        if attribute == 'city':
+            city_id = get_cities({'access_token': f'{SERVICE_TOKEN}', 'v': f'{VERSION}'}, value)
+            value = city_id['items'][0]['id']
+
+        if isinstance(value, str) and value.isdigit():
+            value = int(value)
+
+        return value
+
+    @classmethod
+    def get_usr_age(cls, bday):
+        """
+        Takes the current user's birth date and returns their age.
+
+        :param bday: Birth date formatted as d.m.yyyy
+        :return: Exact user age
+        """
+        if not verify_bday(bday):
+            bday = input('\nBirth date is incomplete or incorrect.'
+                         '\nPlease, enter your birth date as d.m.yyyy\n').rstrip()
+        bday = datetime.strptime(bday, '%d.%m.%Y')
+        today = datetime.today()
+        return today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
 
     @property
     def search_criteria(self):
@@ -53,20 +128,56 @@ class User:
 
 class Match(User):
 
-    def __init__(self, info, personal, interest, groups, photos):
-        super().__init__(info, personal, interest, groups)
-        self.photos = None
-        self.common_friends = 0
+    def __init__(self, general, personal, interest, groups, photos):
+        super().__init__(general, personal, interest, groups)
+        self.photos = tuple(photos)
+        self.common_friends = int(general['common_friends'])
         self.score = 400  # base score
         self.interests_score = 0
         self.personal_score = 0
         self.friends_score = 0
         self.groups_score = 0
 
-        self._set_photos(photos)
+    @classmethod
+    def from_api(cls, info, groups, *args, **kwargs):
+        general, personal, interests = cls.parse(info)
+        return cls(general, personal, interests, groups, kwargs['photos'])
 
-    def _set_photos(self, photos):
-        self.photos = tuple(photos)
+    @classmethod
+    def parse(cls, info):
+        """
+        Takes a VK API `User` object in the form of a dictionary and prepares its contents
+        in order to create a :class:`Match` object.
+
+        :param info: dictionary describing a VK API `User` object
+        :return: tuple of dicts (general profile info, personal info, interests info)
+        """
+        flat_response = flatten(info)
+        bad_value = ''
+
+        parsed_info = {}
+        parsed_personal = {}
+        parsed_interests = {}
+
+        for category, mapping in match_map.items():
+            for vk_field, cls_attr in mapping.items():
+                value = flat_response.get(vk_field, None)
+                if not value or value == bad_value:
+                    value = False
+                if vk_field == 'bdate':
+                    if not verify_bday(value):
+                        value = 'Unknown'
+                    else:
+                        value = cls.get_usr_age(value)
+
+                if category == 'personal':
+                    parsed_personal[cls_attr] = value
+                elif category == 'interests':
+                    parsed_interests[cls_attr] = value
+                else:
+                    parsed_info[cls_attr] = value
+
+        return parsed_info, parsed_personal, parsed_interests
 
     @property
     def total_score(self):
@@ -129,4 +240,8 @@ class Match(User):
 
     @classmethod
     def from_database(cls, db_user):
+        pass
+
+    @classmethod
+    def ask_for_attribute(cls, attribute):
         pass

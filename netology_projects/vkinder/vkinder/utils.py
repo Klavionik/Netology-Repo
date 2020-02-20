@@ -1,6 +1,8 @@
 import re
-from datetime import datetime
-from .globals import photo_sizes
+
+import progressbar
+
+from vkinder.globals import photo_sizes, END, V
 
 
 def cleanup(text):
@@ -44,6 +46,7 @@ def find_largest_photo(links):
     :param links: `Sizes` array (a list of dicts)
     :return: Largest photo url (a string)
     """
+
     def size_type_to_int(size):
         return photo_sizes[size]
 
@@ -68,6 +71,17 @@ def flatten(d):
     return flat
 
 
+def next_ids(ids, amount=12):
+    """
+    Splits a list of matches ids in chunks.
+
+    :param ids: List of matches ids
+    :param amount: Amount of ids yielded per iteration
+    """
+    for index in range(0, len(ids), amount):
+        yield ids[index:index + amount]
+
+
 def verify_bday(value):
     """
     Validates if a given date string conforms to the format used for get_usr_age function.
@@ -86,27 +100,14 @@ def verify_bday(value):
         return verification
 
 
-def next_ids(ids, amount=12):
+def progress_bar(text):
     """
-    Splits a list of matches ids in chunks.
+    Displays a fancy progress bar.
 
-    :param ids: List of matches ids
-    :param amount: Amount of ids yielded per iteration
+    :param text: Progress bar text
+    :return: :module:`progressbar2` progress bar
     """
-    for index in range(0, len(ids), amount):
-        yield ids[index:index + amount]
-
-
-def get_usr_age(bday):
-    """
-    Takes the current user's birth date and returns their age.
-
-    :param bday: Birth date formatted as d.m.yyyy
-    :return: Exact user age
-    """
-    if not verify_bday(bday):
-        bday = input('\nBirth date is incomplete or incorrect.'
-                     '\nPlease, enter your birth date as d.m.yyyy\n').rstrip()
-    bday = datetime.strptime(bday, '%d.%m.%Y')
-    today = datetime.today()
-    return today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
+    bar = \
+        progressbar.ProgressBar(widgets=[f'{V}{text}{END}', progressbar.Percentage(),
+        progressbar.Bar(marker=progressbar.AnimatedMarker(fill=f'#'))])
+    return bar

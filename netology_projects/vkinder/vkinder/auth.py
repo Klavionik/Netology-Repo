@@ -1,20 +1,23 @@
 import pickle
 
+import os
 import requests
+from getpass import getpass
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 
-from .exceptions import APIError
-from .globals import *
+from vkinder.exceptions import APIError
+from vkinder.globals import *
 
 # keeps Selenium from opening up a browser window and adds custom user-agent
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument(f'--user-agent={USER_AGENT}')
-driver = webdriver.Chrome(CHROMEDRIVER, chrome_options=chrome_options)
+chrome_options.add_argument('log-level=2')
+driver = webdriver.Chrome(DRIVER, chrome_options=chrome_options)
 
 allow_button = r'//*[@id="oauth_wrap_content"]/div[3]/div/div[1]/button[1]'
 
@@ -26,7 +29,7 @@ def get_token(save):
 
     :return: VK API token as a string
     """
-    print('We need to authorize you with VK\n')
+    print(f'{Y}VKInder v0.4\nWe need to authorize you with VK{END}\n')
 
     with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID),
                        redirect_uri=REDIRECT_URI,
@@ -36,12 +39,12 @@ def get_token(save):
         driver.get(authorization_url)
         form_email = driver.find_element_by_name("email")
         form_pass = driver.find_element_by_name("pass")
-        form_email.send_keys(input('Enter your VK email or phone number\n'))
-        form_pass.send_keys(input('Enter your VK password\n'))
+        form_email.send_keys(input('Enter your VK email or phone number:\n'))
+        form_pass.send_keys(getpass('Enter your VK password:\n'))
         form_email.submit()
         try:
             security_check = driver.find_element_by_name('code')
-            security_check.send_keys(input('Enter authentication code\n'))
+            security_check.send_keys(input('Enter authentication code:\n'))
             security_check.submit()
         except NoSuchElementException:
             pass
@@ -106,9 +109,10 @@ def authorize(save=True):
         first_name = test_response['response'][0]['first_name']
         last_name = test_response['response'][0]['last_name']
         user_id = test_response['response'][0]['id']
-        print(f"User: {first_name} {last_name}")
+        os.system('cls')
+        print(f"{G}Authorized as: {first_name} {last_name}{END}")
     except APIError as error:
-        print('API Error:', error.message, error.body)
+        print(f'{R}API Error:{END}', error.message, error.body)
         quit()
 
     return token, user_id
