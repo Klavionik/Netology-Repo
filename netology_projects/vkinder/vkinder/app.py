@@ -97,8 +97,10 @@ class App:
 
         with db_session(self.db.factory) as session:
             users_list = self.db.get_all_users(session)
-            for user in users_list:
-                print(f'{G}{user.name} {user.surname} Age {user.age} ID {user.uid}{END}')
+            if users_list:
+                return self._make_list(users_list)
+            else:
+                return False
 
     def next_match(self, user_id):
 
@@ -114,6 +116,15 @@ class App:
             json.dump(top10_matches, f, indent=2, ensure_ascii=False)
 
             return len(top10_matches)
+
+    @staticmethod
+    def _make_list(db_list):
+        users_list = []
+
+        for user in db_list:
+            users_list.append({'name': user.name, 'surname': user.surname,
+                               'age': user.age, 'uid': user.uid})
+        return users_list
 
     def _fetch_user(self, identificator):
         api_response = api.users_get(self.auth,
