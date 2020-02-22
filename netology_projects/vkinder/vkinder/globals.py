@@ -1,7 +1,7 @@
 import os
 import configparser
 
-root = os.path.dirname(os.pardir)
+root = os.path.dirname(os.path.dirname(__file__))
 
 config = configparser.ConfigParser()
 config.read_file(open(os.path.join(root, 'config.ini')))
