@@ -97,8 +97,10 @@ class App:
 
         with db_session(self.db.factory) as session:
             users_list = self.db.get_all_users(session)
-            for user in users_list:
-                print(f'{G}{user.name} {user.surname} Age {user.age} ID {user.uid}{END}')
+            if users_list:
+                return users_list
+            else:
+                return False
 
     def next_match(self, user_id):
 

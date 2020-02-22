@@ -74,7 +74,13 @@ def main():
                 print(f'{R}User not found.{END}')
 
         elif option == '-l':
-            vkinder.list_users()
+            users_list = vkinder.list_users()
+            if users_list is not False:
+                for user in users_list:
+                    print(f'{G}{user.name} {user.surname} Age {user.age} ID {user.uid}{END}')
+            else:
+                print(f'{R}No saved users.{END}')
+
         elif option == '-q':
             quit()
 
