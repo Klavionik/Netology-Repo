@@ -111,7 +111,7 @@ class App:
 
         path = os.path.join(data, f'{user_id}_matches.json')
         with open(path, 'w', encoding='utf8') as f:
-            json.dump(top10_matches, f, indent=2)
+            json.dump(top10_matches, f, indent=2, ensure_ascii=False)
 
             return len(top10_matches)
 
