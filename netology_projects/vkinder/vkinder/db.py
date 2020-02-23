@@ -50,7 +50,8 @@ class Match(Base):
 
     id = Column(Integer, primary_key=True)
     uid = Column(Integer, unique=True)
-    user_uid = Column(Integer, ForeignKey('users.uid', ondelete='CASCADE'))
+    user_uid = Column(Integer, ForeignKey('users.uid', ondelete='CASCADE',
+                                          onupdate='CASCADE'))
     name = Column(String)
     surname = Column(String)
     profile = Column(String(32), unique=True)
@@ -66,7 +67,8 @@ class Photo(Base):
     __tablename__ = 'photos'
 
     id = Column(Integer, primary_key=True)
-    match_uid = Column(Integer, ForeignKey('matches.uid', ondelete='CASCADE'))
+    match_uid = Column(Integer, ForeignKey('matches.uid', ondelete='CASCADE',
+                                           onupdate='CASCADE'))
     link = Column(String)
     owner = relationship('Match', backref=backref('photos'))
 

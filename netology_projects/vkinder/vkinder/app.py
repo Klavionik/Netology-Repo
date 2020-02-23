@@ -11,7 +11,7 @@ from vkinder.types import User, Match
 
 class App:
 
-    def __init__(self, owner_id, token, output_amount, refresh):
+    def __init__(self, owner_id, token, output_amount, refresh, db=dbpath):
         """
         Initializes an instance of the VKInder app.
 
@@ -23,7 +23,7 @@ class App:
         self.api = API_URL
         self.v = VERSION
         self.auth = {'v': self.v, 'access_token': self.token}
-        self.db = AppDB(dbpath)
+        self.db = AppDB(db)
         self.refresh = refresh
         self.output_amount = output_amount
         self.req_fields = 'bdate,city,sex,common_count,' \
@@ -117,23 +117,14 @@ class App:
 
             return len(top10_matches)
 
-    @staticmethod
-    def _make_list(db_list):
-        users_list = []
-
-        for user in db_list:
-            users_list.append({'name': user.name, 'surname': user.surname,
-                               'age': user.age, 'uid': user.uid})
-        return users_list
-
     def _fetch_user(self, identificator):
         api_response = api.users_get(self.auth,
                                      user_ids=identificator,
                                      fields=self.req_fields)
         user_info = api_response[0]
-        target_id = user_info['id']
+        user_id = user_info['id']
 
-        return target_id, user_info
+        return user_id, user_info
 
     def _fetch_user_groups(self, user_id):
 
@@ -272,6 +263,15 @@ class App:
             photos_processed.append(photo_processed)
 
         return sorted(photos_processed, key=lambda x: x['likes'], reverse=True)[:3]
+
+    @staticmethod
+    def _make_list(db_list):
+        users_list = []
+
+        for user in db_list:
+            users_list.append({'name': user.name, 'surname': user.surname,
+                               'age': user.age, 'uid': user.uid})
+        return users_list
 
 
 def startup():
