@@ -90,7 +90,7 @@ def verify_bday(value):
     :return: :class:re.Match object if the given argument is correct,
     None if not correct or not a string
     """
-    pattern = re.compile(r'^\d\.\d\.\d{4}$')
+    pattern = re.compile(r'^\d?\d\.\d\.\d{4}$')
 
     try:
         verification = re.match(pattern, value)

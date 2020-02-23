@@ -82,9 +82,9 @@ class AppDB:
 
         :param db_url: Path to the database file
         """
-        db = create_engine(db_url)
-        Base.metadata.create_all(db)
-        self.factory = sessionmaker(bind=db)
+        self.db = create_engine(db_url)
+        Base.metadata.create_all(self.db)
+        self.factory = sessionmaker(bind=self.db)
 
     @staticmethod
     def add_user(user_object, session):

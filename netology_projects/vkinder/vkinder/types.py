@@ -53,12 +53,12 @@ class User:
         for category, mapping in user_map.items():
             for vk_field, cls_attr in mapping.items():
                 attr = flat_info.get(vk_field, None)
-                if not attr or attr == bad_value:
-                    attr = cls.ask_for_attribute(cls_attr)
                 if vk_field == 'bdate':
                     attr = cls.get_usr_age(attr)
-                if vk_field == 'common_friends':
+                elif vk_field == 'common_friends':
                     pass  # :class:`User` object actually doesn't need this :\
+                elif not attr or attr == bad_value:
+                    attr = cls.ask_for_attribute(cls_attr)
 
                 if category == 'personal':
                     parsed_personal[cls_attr] = attr
