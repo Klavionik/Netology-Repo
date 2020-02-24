@@ -4,10 +4,11 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from vkinder import app as vkinder
-from vkinder.globals import root
+from vkinder.globals import root, data
 from vkinder.types import User
-from vkinder.db import db_session
+from vkinder.db import db_session, Base
 
+output_amount = 10
 fixtures_path = os.path.join(root, 'tests', 'fixtures')
 db_path = os.path.join(fixtures_path, "test.db")
 mock_print = MagicMock()
@@ -26,13 +27,17 @@ class TestApp(unittest.TestCase):
     def setUp(self) -> None:
         self.app = vkinder.App('test_id',
                                'test_token',
-                               output_amount=10,
+                               output_amount=output_amount,
                                refresh=False,
                                db=db_path)
+
+    def tearDown(self) -> None:
+        Base.metadata.drop_all(self.app.db.db)
 
     @classmethod
     def tearDownClass(cls) -> None:
         os.remove(db_path)
+        os.remove(os.path.join(data, f'{user[0]["id"]}_matches.json'))
 
     @patch('vkinder.app.App._fetch_user_groups')
     @patch('vkinder.app.App._fetch_user')
@@ -82,6 +87,41 @@ class TestApp(unittest.TestCase):
                          'Returns number of found matches')
         self.assertEqual(matches_length, len(self.app.matches),
                          'All found matches assigned to the class attribute')
+
+    @patch('vkinder.app.App._fetch_user_groups')
+    @patch('vkinder.app.App._fetch_user')
+    def test_list_users(self, mock_fetch_user, mock_fetch_user_groups):
+        mock_fetch_user.return_value = (user[0]['id'], user[0])
+        mock_fetch_user_groups.return_value = groups
+
+        self.assertFalse(self.app.list_users(),
+                         'Returns False if no users present in the db')
+        self.app.new_user(user[0]['id'])
+        self.assertEqual(len(self.app.list_users()), 1,
+                         'Returns all users from the db')
+
+    @patch('vkinder.app.App._fetch_user_groups')
+    @patch('vkinder.app.App._fetch_user')
+    @patch('vkinder.app.App._prepare_matches')
+    def test_next_matches(self, mock_prepare_matches, mock_fetch_user, mock_fetch_user_groups):
+        mock_prepare_matches.return_value = (matches['matches_info'],
+                                             matches['matches_groups'],
+                                             matches['matches_photos'])
+        mock_fetch_user.return_value = (user[0]['id'], user[0])
+        mock_fetch_user_groups.return_value = groups
+
+        self.assertFalse(self.app.next_matches(user[0]['id']),
+                         'Returns False if the user is not present in the db')
+        self.app.new_user(user[0]['id'])
+        self.app.spawn_matches()
+        self.assertEqual(self.app.next_matches(user[0]['id']), 10,
+                         'First call should return 10 records')
+        self.assertEqual(self.app.next_matches(user[0]['id']), 10,
+                         'Second call should return 10 records')
+        self.assertEqual(self.app.next_matches(user[0]['id']), 1,
+                         'Third call should return 1 record')
+        self.assertEqual(self.app.next_matches(user[0]['id']), 0,
+                         'Fouth call should return 0 record')
 
 
 if __name__ == '__main__':
