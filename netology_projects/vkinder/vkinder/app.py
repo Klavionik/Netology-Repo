@@ -1,5 +1,4 @@
 import json
-import sys
 from time import sleep
 
 import vkinder.api as api
