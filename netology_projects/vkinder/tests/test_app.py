@@ -20,7 +20,7 @@ with open(f"{os.path.join(fixtures_path, 'matches.json')}", encoding='utf8') as 
 
 
 @patch('builtins.print', mock_print)
-class NewUserTest(unittest.TestCase):
+class TestApp(unittest.TestCase):
 
     def setUp(self) -> None:
         self.app = vkinder.App('test_id',
