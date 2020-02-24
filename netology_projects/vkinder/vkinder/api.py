@@ -3,7 +3,7 @@ from collections import namedtuple
 import requests
 
 from vkinder.exceptions import APIError
-from vkinder.globals import API_URL
+from vkinder.globals import API_URL, SERVICE_TOKEN, VERSION
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
@@ -18,9 +18,9 @@ others_api = OtherMethods(getcities='/database.getCities', execute='/execute')
 def vkrequest(methodfunc):
     """
     Wraps a function that returns a response from the VK API,
-    checls if received response is correct and unpacks it.
-    Raises `requests` lib `HTTPError` if response status
-    if not `OK`.
+    checks if received response is correct and unpacks it.
+    Raises `requests` lib `HTTPError` exception if response status
+    if not 200 `OK`.
 
     :param methodfunc: Function that returns a response object
     :return: Unpacked response
@@ -47,7 +47,7 @@ def users_search(auth, criteria):
 
     :param auth: Auth parameters
     :param criteria: Search criteria
-    :return: Response dict
+    :return: Matching users
     """
     params = {**auth, **criteria}
 
@@ -110,16 +110,16 @@ def users_get(auth, user_ids, fields):
 
 
 @vkrequest
-def get_cities(auth, city_name, count=1):
+def get_cities(city_name, count=1):
     """
     Makes a request to the VK API `database.getCities` method and
     returns the contents of the response.
 
-    :param auth: Auth parameters
     :param city_name: Search query for the method
     :param count: Number of cities to return
-    :return: Response dict
+    :return: List of cities
     """
+    auth = {'access_token': f'{SERVICE_TOKEN}', 'v': f'{VERSION}'}
     params = {**auth, 'country_id': 1, 'q': city_name, 'count': count}
 
     response = requests.get(API_URL + others_api.getcities, params=params)

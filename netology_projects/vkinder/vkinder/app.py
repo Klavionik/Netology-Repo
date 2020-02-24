@@ -3,10 +3,10 @@ from time import sleep
 
 import vkinder.api as api
 import vkinder.utils as utils
-from vkinder.auth import authorize
-from vkinder.db import AppDB, db_session
-from vkinder.globals import *
-from vkinder.types import User, Match
+from .auth import authorize
+from .db import AppDB, db_session
+from .globals import *
+from .types import User, Match
 
 
 class App:
@@ -37,17 +37,16 @@ class App:
         Collects all required data from the VK API and user input and creates a User object
         (representing the current user, i.e. the person looking for a match).
 
-        Loads user from the database if found,
-
         :param target: target user id
-        :return: :class:`User` object
+        :return: string representation of :class:`User` object
         """
         target_id, target_info = self._fetch_user(target)
 
         with db_session(self.db.factory) as session:
-            user_from_db = self.db.get_user(target_id, session)
-            if user_from_db and not self.refresh:
-                user = User.from_database(user_from_db)
+            user_in_db = self.db.get_user(target_id, session)
+
+            if user_in_db and not self.refresh:
+                user = User.from_database(user_in_db)
                 self.current_user = user
                 print(f'\n{G}{user} loaded from the database.{END}')
             else:
@@ -61,10 +60,10 @@ class App:
 
     def spawn_matches(self):
         """
-        Creates a list of :class:`Match` objects using the information acquired
+        Creates a list of :class:`Match` objects using the information acquired.
         from the VK API and processed by the application. Adds every match to the database.
 
-        :return: list of :class:`Match` objects
+        :return: list of :class:`Match` objects.
         """
 
         if self.current_user:
@@ -94,28 +93,39 @@ class App:
             return False
 
     def list_users(self):
+        """
+        Returns list of all users saved in the database.
 
+        :return: Saved users list or False if no users found.
+        """
         with db_session(self.db.factory) as session:
-            users_list = self.db.get_all_users(session)
-            if users_list:
-                return self._make_list(users_list)
+            all_users = self.db.get_all_users(session)
+            if all_users:
+                return self._make_list(all_users)
             else:
                 return False
 
-    def next_match(self, user_id):
+    def next_matches(self, user_id, amount=AMOUNT):
+        """
+        Exports next `amount` of matches for the user with the `user_id`
+        to a JSON file.
 
+        :param user_id: VK user id.
+        :param amount: Amount of matches to export.
+        :return: Number of exported matches or False if no user found.
+        """
         with db_session(self.db.factory) as session:
             user = self.db.get_user(user_id, session)
             if user:
-                top10_matches = self.db.pop_match(user_id, AMOUNT, session)
+                next_matches = self.db.pop_match(user_id, amount, session)
             else:
                 return False
 
         path = os.path.join(data, f'{user_id}_matches.json')
         with open(path, 'w', encoding='utf8') as f:
-            json.dump(top10_matches, f, indent=2, ensure_ascii=False)
+            json.dump(next_matches, f, indent=2, ensure_ascii=False)
 
-            return len(top10_matches)
+            return len(next_matches)
 
     def _fetch_user(self, identificator):
         api_response = api.users_get(self.auth,
@@ -136,27 +146,27 @@ class App:
         Coordinates acquiring and processing matches profiles in order to spawn
         :class:`Match` objects.
 
-        :return: tuple of lists
+        :return: Prepared matches info
         """
 
         match_search_criteria = self.current_user.search_criteria
         possible_matches = self._get_possible_matches(match_search_criteria)
 
         matches_ids = self._get_matches_ids(possible_matches)
-        matches_info = api.users_get(self.auth,
-                                     user_ids=matches_ids,
-                                     fields=self.req_fields)
+        matches_general = api.users_get(self.auth,
+                                        user_ids=matches_ids,
+                                        fields=self.req_fields)
         matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
 
-        return matches_info, matches_groups, matches_photos
+        return matches_general, matches_groups, matches_photos
 
     def _get_possible_matches(self, search_criteria):
         """
         Acquires VK user profiles matching the current user profile based on
-        sex, age range and city of residence.
+        the given criteria.
 
-        :param search_criteria: dictionary of request parameters
-        :return: list of dictionaries, each describing a VK API `User` object
+        :param search_criteria: Search criteria for users.search method
+        :return: List of dictionaries, each describing a VK API `User` object.
         """
         possible_matches = api.users_search(self.auth, search_criteria)['items']
 
@@ -176,8 +186,8 @@ class App:
         If all these conditions are met, then the function adds a match id to
         to the final list of matches.
 
-        :param matches_items: list of VK `User` objects
-        :return: list of matches ids
+        :param matches_items: List of VK `User` objects.
+        :return: List of matches ids.
         """
         bar = utils.progress_bar('Sorting out data: ')
 
@@ -197,10 +207,10 @@ class App:
     def _prepare_code(ids):
         """
         Reads a VKScript code from a text file, replaces `ids` and `count`
-        variables in that code and returns it ready to be sent to the `execute` method.
+        variables in that code and returns the result.
 
-        :param ids: list of possible matches ids
-        :return: string containing VKScript code
+        :param ids: List of matches ids.
+        :return: String containing VKScript code.
         """
         path = os.path.join(resources, 'vkscript.txt')
 
@@ -227,8 +237,8 @@ class App:
         and then concatenate all results in the variables
         `matches_groups` and `matches_photos`.
 
-        :param matches_ids: list of matches ids
-        :return: tuple of dicts (matches groups, matches photos)
+        :param matches_ids: List of matches ids.
+        :return: Tuple of dicts (matches groups, matches photos).
         """
         matches_groups = []
         matches_photos = []
@@ -252,8 +262,8 @@ class App:
         Takes a list of dicts, each describing a photo of a possible match
         and returns a list of the top-3 most popular photos (based on the amount of likes).
 
-        :param photos: list of all photos for a match
-        :return: list of top-3 photos for a match
+        :param photos: list of all photos for a match.
+        :return: list of top-3 photos for a match.
         """
         photos_processed = []
 
@@ -265,10 +275,10 @@ class App:
         return sorted(photos_processed, key=lambda x: x['likes'], reverse=True)[:3]
 
     @staticmethod
-    def _make_list(db_list):
+    def _make_list(db_users_list):
         users_list = []
 
-        for user in db_list:
+        for user in db_users_list:
             users_list.append({'name': user.name, 'surname': user.surname,
                                'age': user.age, 'uid': user.uid})
         return users_list

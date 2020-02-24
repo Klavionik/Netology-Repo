@@ -2,7 +2,7 @@ import re
 
 import progressbar
 
-from vkinder.globals import photo_sizes, END, V
+from .globals import photo_sizes, END, V
 
 
 def cleanup(text):
@@ -108,6 +108,8 @@ def progress_bar(text):
     :return: :module:`progressbar2` progress bar
     """
     bar = \
-        progressbar.ProgressBar(widgets=[f'{V}{text}{END}', progressbar.Percentage(),
-        progressbar.Bar(marker=progressbar.AnimatedMarker(fill=f'#'))])
+        progressbar.ProgressBar(widgets=[f'{V}{text}{END}',
+                                         progressbar.Percentage(),
+                                         progressbar.Bar
+                                         (marker=progressbar.AnimatedMarker(fill=f'#'))])
     return bar
