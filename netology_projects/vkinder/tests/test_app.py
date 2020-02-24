@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 from vkinder import app as vkinder
 from vkinder.globals import root
 from vkinder.types import User
+from vkinder.db import db_session
 
 fixtures_path = os.path.join(root, 'tests', 'fixtures')
 db_path = os.path.join(fixtures_path, "test.db")
@@ -51,6 +52,8 @@ class TestApp(unittest.TestCase):
     @patch('vkinder.app.App._fetch_user')
     def test_new_user_from_database(self, mock_fetch_user):
         mock_fetch_user.return_value = (user[0]['id'], None)
+        with db_session(self.app.db.factory) as session:
+            self.app.db.add_user(User.from_api(user[0], groups), session)
 
         self.app.new_user(user[0]['id'])
 
