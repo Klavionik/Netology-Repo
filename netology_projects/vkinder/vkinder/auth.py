@@ -1,16 +1,16 @@
 import pickle
-
-import os
-import requests
 from getpass import getpass
+
+import requests
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 
-from vkinder.exceptions import APIError
-from vkinder.globals import *
+from .api import vkrequest
+from .globals import *
+from .utils import clean_screen
 
 # keeps Selenium from opening up a browser window and adds custom user-agent
 chrome_options = Options()
@@ -27,7 +27,7 @@ def get_token(save):
     Establishes an OAuth2 session to retrieve a token for further API requests.
     Saves retrieved token to a file.
 
-    :return: VK API token as a string
+    :return: VK API token
     """
     print(f'{Y}VKInder v0.4\nWe need to authorize you with VK{END}\n')
 
@@ -66,7 +66,7 @@ def get_token(save):
 def open_token():
     """
     Reads VK API token from a saved file.
-    :return: VK API token as a string
+    :return: VK API token
     """
     with open(tokenpath, "rb") as f:
         token = pickle.load(f)
@@ -74,10 +74,24 @@ def open_token():
     return token
 
 
+@vkrequest
+def test_request(token):
+    """
+    Sends a test request to ensure authorization went right.
+
+    :param token: VK API token
+    :return: App owner info
+    """
+    params = {'v': VERSION, 'access_token': token}
+    test_response = requests.get(API_URL + '/users.get', params)
+
+    return test_response
+
+
 def save_token(token):
     """
     Saves VK API token to a file.
-    :param token: VK API token as a string
+    :param token: VK API token
     """
     with open(tokenpath, "wb") as f:
         pickle.dump(token, f)
@@ -89,30 +103,21 @@ def authorize(save=True):
     Tries to read token from a file and if it fails, runs get_token()
     to obtain a new token from a user.
 
-    :param save: Boolean value, False if you don't want the app
-    to save the token to a file.
-    :return: Tuple (token string, token owner id int)
+    :param save: Boolean value, False if you don't want to save the token to a file
+    :return: Tuple (token, token owner id)
     """
-    user_id = None
 
     try:
         token = open_token()
     except FileNotFoundError:
         token = get_token(save)
 
-    # make a test request to the API, quit if error occured
-    try:
-        params = {'v': VERSION, 'access_token': token}
-        test_response = requests.get(API_URL + '/users.get', params).json()
-        if 'response' not in test_response:
-            raise APIError(test_response)
-        first_name = test_response['response'][0]['first_name']
-        last_name = test_response['response'][0]['last_name']
-        user_id = test_response['response'][0]['id']
-        os.system('cls')
-        print(f"{G}Authorized as: {first_name} {last_name}{END}")
-    except APIError as error:
-        print(f'{R}API Error:{END}', error.message, error.body)
-        quit()
+    response = test_request(token)
+    owner_name = response[0]['first_name']
+    owner_surname = response[0]['last_name']
+    owner_id = response[0]['id']
+    clean_screen()
 
-    return token, user_id
+    print(f"{G}Authorized as: {owner_name} {owner_surname}{END}")
+
+    return token, owner_id

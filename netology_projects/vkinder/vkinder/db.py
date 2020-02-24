@@ -1,11 +1,13 @@
 import pickle
 from contextlib import contextmanager
-from vkinder.globals import R, END
+
 from sqlalchemy import Column, Integer, String, BLOB, Boolean, ForeignKey
 from sqlalchemy import create_engine, desc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, backref, sessionmaker
+
+from .globals import R, END
 
 Base = declarative_base()
 
@@ -57,7 +59,7 @@ class Match(Base):
     profile = Column(String(32), unique=True)
     total_score = Column(Integer)
     seen = Column(Boolean, default=False)
-    user = relationship('User', backref=backref('matches', order_by=total_score))
+    user = relationship('User', backref=backref('matches'))
 
     def __repr__(self):
         return f'Match ID{self.uid} Name: {self.name} Surname: {self.surname}'
@@ -86,20 +88,15 @@ class AppDB:
         Base.metadata.create_all(self.db)
         self.factory = sessionmaker(bind=self.db)
 
-    @staticmethod
-    def add_user(user_object, session):
+    def add_user(self, user_object, session):
         """
-        Adds new user to the database.
-
-        Checks if user with the given uid already exists.
-        If true, updates the corresponding user record in
-        the `users` table. If not, inserts a new record into
-        the `users` table.
+        Adds new user to the database if it doesn't exist in the table 'users',
+        otherwise updates the record.
 
         :param user_object: :class:`User` object
         :param session: SQLAlchemy session
         """
-        user = session.query(User).filter(User.uid == user_object.uid).first()
+        user = self.get_user(user_object.uid, session)
 
         if not user:
             new_user = User(uid=user_object.uid,
@@ -121,22 +118,17 @@ class AppDB:
 
             session.add(user)
 
-    @staticmethod
-    def add_match(match_object, photos, user_uid, session):
+    def add_match(self, match_object, photos, user_uid, session):
         """
-        Adds new match to the database.
-
-        Checks if match with the given uid already exists.
-        If true, updates the corresponding match record in
-        the `matches` table. If not, inserts a new record into
-        the `matches` table.
+        Adds new match to the database if it doesn't exist in the table 'matches',
+        otherwise updates the record.
 
         :param match_object: :Class:`Match` object
-        :param photos: List of 3 most popular photo of the match
+        :param photos: List of 3 most popular photos of the match
         :param user_uid: User uid, whom the match belongs
         :param session: SQLAlchemy session
         """
-        match = session.query(Match).filter(Match.uid == match_object.uid).first()
+        match = self.get_match(match_object.uid, session)
 
         if not match:
             new_match = Match(uid=match_object.uid,
@@ -157,10 +149,38 @@ class AppDB:
             session.add_all([match, *new_photos])
 
     @staticmethod
+    def get_user(uid, session):
+        """
+        Returns a User with the given id, if it exists in the table `users`.
+
+        :param uid: User id
+        :param session: SQLAlchemy session
+        :return: SQLAlchemy User object
+        """
+        user = session.query(User).filter(User.uid == uid).first()
+
+        if user:
+            return user
+
+    @staticmethod
+    def get_match(match_uid, session):
+        """
+        Returns a Match instance with the given id, if it exists in the table `matches`.
+
+        :param match_uid: Match user id
+        :param session: SQLAlchemy session
+        :return: SQLAlchemy Match object
+        """
+        match = session.query(Match).filter(Match.uid == match_uid).first()
+
+        if match:
+            return match
+
+    @staticmethod
     def pop_match(user_uid, count, session):
         """
         Returns name, surname, profile, total score and photos
-        of the next match with the biggest total score.
+        of the next unseen match with the largest total score.
 
         :param user_uid: :class:`User` id of the match
         :param count: Number of matches to return
@@ -170,7 +190,7 @@ class AppDB:
         matches = {}
 
         match_query = session.query(Match)
-        get_photos = session.query(Photo.link)
+        photos_query = session.query(Photo.link)
 
         for match in match_query. \
                 filter(Match.user_uid == user_uid, ~ Match.seen). \
@@ -180,28 +200,20 @@ class AppDB:
                                  'profile': match.profile,
                                  'total_score': match.total_score}
 
-            photos = get_photos.filter(Photo.match_uid == match.uid).all()
+            photos = photos_query.filter(Photo.match_uid == match.uid).all()
             matches[match.id]['photos'] = [photo[0] for photo in photos]
             match.seen = True
 
         return matches
 
     @staticmethod
-    def get_user(uid, session):
-        """
-        Returns a User mapping with the given id, if it exists in the table `users`.
-
-        :param uid: :class:`User` id
-        :param session: SQLAlchemy session
-        :return: SQLAlchemy User mapping
-        """
-        user = session.query(User).filter(User.uid == uid).first()
-
-        if user:
-            return user
-
-    @staticmethod
     def get_all_users(session):
+        """
+        Returns a list of all User instances from the database.
+
+        :param session: SQLAlchemy session
+        :return: List of User instances
+        """
         users = session.query(User).all()
 
         if users:

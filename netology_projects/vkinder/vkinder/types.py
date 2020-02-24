@@ -1,9 +1,9 @@
 import pickle
 from datetime import datetime
 
-from vkinder.api import get_cities
-from vkinder.globals import *
-from vkinder.utils import cleanup, common, verify_bday, flatten
+from .api import get_cities
+from .globals import *
+from .utils import cleanup, common, verify_bday, flatten
 
 
 class User:
@@ -40,8 +40,8 @@ class User:
         Takes a VK API `User` object in the form of a dictionary and prepares its contents
         in order to create a :class:`User` object.
 
-        :param info: dictionary describing a VK API `User` object
-        :return: tuple of dicts (general profile info, personal info, interests info)
+        :param info: Dictionary describing a VK API `User` object
+        :return: Parsed user profile info
         """
         flat_info = flatten(info)
         bad_value = ''
@@ -73,20 +73,18 @@ class User:
     def ask_for_attribute(cls, attribute):
         """
         Handles the case, when user information is incomplete and requires clarification.
-        Displays an appropriate message, prompts for an input.
 
-        If given attribute value is a city name, sends a request to the VK API `database.getCities`
-        method in order to get a city id.
-
-        :param attribute: attribute of :class:`User`
-        :return: attribute's value
+        :param attribute: Attribute name of :class:`User`
+        :return: Attribute's value
         """
         path = os.path.join(resources, 'output', attribute)
-        output = open(f'{path}.txt', encoding='utf8').read().strip()
+
+        with open(f'{path}.txt', encoding='utf8') as f:
+            output = f.read().strip()
         value = input(f'\n{output}\n\n')
 
         if attribute == 'city':
-            city_id = get_cities({'access_token': f'{SERVICE_TOKEN}', 'v': f'{VERSION}'}, value)
+            city_id = get_cities(value)
             value = city_id['items'][0]['id']
 
         if isinstance(value, str) and value.isdigit():
@@ -149,8 +147,8 @@ class Match(User):
         Takes a VK API `User` object in the form of a dictionary and prepares its contents
         in order to create a :class:`Match` object.
 
-        :param info: dictionary describing a VK API `User` object
-        :return: tuple of dicts (general profile info, personal info, interests info)
+        :param info: Dictionary describing a VK API `User` object
+        :return: Parsed user profile info
         """
         flat_response = flatten(info)
         bad_value = ''
