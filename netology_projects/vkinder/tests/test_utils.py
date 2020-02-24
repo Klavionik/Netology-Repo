@@ -4,7 +4,7 @@ import json
 import vkinder.utils as utils
 from vkinder.globals import root
 
-fixture_photos = os.path.join(root, 'tests', 'fixtures', 'photos.json')
+fixture_photos = os.path.join(root, 'tests', 'fixtures', 'utils_photos.json')
 
 
 class UtilsTest(unittest.TestCase):

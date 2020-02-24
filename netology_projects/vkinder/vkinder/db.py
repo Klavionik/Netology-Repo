@@ -84,7 +84,7 @@ class AppDB:
 
         :param db_url: Path to the database file
         """
-        self.db = create_engine(db_url)
+        self.db = create_engine(f'sqlite:///{db_url}')
         Base.metadata.create_all(self.db)
         self.factory = sessionmaker(bind=self.db)
 

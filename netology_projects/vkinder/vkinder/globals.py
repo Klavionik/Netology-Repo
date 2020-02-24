@@ -46,7 +46,7 @@ resources = os.path.join(root, 'resources')
 # Serialized token path
 tokenpath = os.path.join(data, 'token.dat')
 # SQLite database path
-dbpath = f'sqlite:///{os.path.join(data, "vkinder.db")}'
+dbpath = os.path.join(data, "vkinder.db")
 
 # VK user object item fields -> :class:`User` attributes mapping
 user_map = {'general': config['General User'],
