@@ -51,12 +51,12 @@ class Match(Base):
     __tablename__ = 'matches'
 
     id = Column(Integer, primary_key=True)
-    uid = Column(Integer, unique=True)
+    uid = Column(Integer)
     user_uid = Column(Integer, ForeignKey('users.uid', ondelete='CASCADE',
                                           onupdate='CASCADE'))
     name = Column(String)
     surname = Column(String)
-    profile = Column(String(32), unique=True)
+    profile = Column(String(32))
     total_score = Column(Integer)
     seen = Column(Boolean, default=False)
     user = relationship('User', backref=backref('matches'))
@@ -130,7 +130,7 @@ class AppDB:
         """
         match = self.get_match(match_object.uid, session)
 
-        if not match:
+        if not match or match.uid != user_uid:
             new_match = Match(uid=match_object.uid,
                               user_uid=user_uid,
                               name=match_object.name,
@@ -141,7 +141,7 @@ class AppDB:
             new_photos = [Photo(match_uid=match_object.uid, link=photo['link']) for photo in photos]
             session.add_all([new_match, *new_photos])
         else:
-            match.profle = match_object.profile
+            match.profile = match_object.profile
             match.total_score = match_object.total_score
             new_photos = [Photo(match_uid=match.uid, link=photo['link']) for photo in photos]
 

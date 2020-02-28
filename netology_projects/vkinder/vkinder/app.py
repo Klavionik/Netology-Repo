@@ -15,8 +15,8 @@ class App:
         """
         Initializes an instance of the VKInder app.
 
-        :param owner_id: id of the app owner (i.e. the person, who's running the app)
-        :param token: VK API token of the app owner
+        :param owner_id: id of the app owner (i.e. the person, who's running the app).
+        :param token: VK API token of the app owner.
         """
         self.owner = owner_id
         self.token = token
@@ -37,8 +37,8 @@ class App:
         Collects all required data from the VK API and user input and creates a User object
         (representing the current user, i.e. the person looking for a match).
 
-        :param target: target user id
-        :return: string representation of :class:`User` object
+        :param target: target user id.
+        :return: string representation of :class:`User` object.
         """
         target_id, target_info = self._fetch_user(target)
 
@@ -105,19 +105,18 @@ class App:
             else:
                 return False
 
-    def next_matches(self, user_id, amount=AMOUNT):
+    def next_matches(self, user_id):
         """
         Exports next `amount` of matches for the user with the `user_id`
         to a JSON file.
 
         :param user_id: VK user id.
-        :param amount: Amount of matches to export.
         :return: Number of exported matches or False if no user found.
         """
         with db_session(self.db.factory) as session:
             user = self.db.get_user(user_id, session)
             if user:
-                next_matches = self.db.pop_match(user_id, amount, session)
+                next_matches = self.db.pop_match(user_id, self.output_amount, session)
             else:
                 return False
 

@@ -4,7 +4,7 @@ import sys
 
 import progressbar
 
-from .globals import photo_sizes, END, V
+from .globals import photo_sizes, END, V, R
 
 
 def cleanup(text):
@@ -113,7 +113,17 @@ def progress_bar(text):
         progressbar.ProgressBar(widgets=[f'{V}{text}{END}',
                                          progressbar.Percentage(),
                                          progressbar.Bar
-                                         (marker=progressbar.AnimatedMarker(fill=f'#'))])
+                                         (marker=progressbar.AnimatedMarker(
+            fill='#',
+            fill_wrap=(
+                f'{R}',
+                '\033[0m',
+            ),
+            marker_wrap=(
+                f'{R}',
+                '\033[0m',
+            ),
+        ))])
     return bar
 
 
