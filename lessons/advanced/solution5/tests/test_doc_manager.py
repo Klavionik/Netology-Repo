@@ -13,8 +13,8 @@ documents = []
 directories = {}
 
 
-@patch('advanced.solution2_1.doc_manager.documents', documents)
-@patch('advanced.solution2_1.doc_manager.directories', directories)
+@patch('advanced.solution5.doc_manager.documents', documents)
+@patch('advanced.solution5.doc_manager.directories', directories)
 class TestSecretary(unittest.TestCase):
 
     test_shelf = "4"
