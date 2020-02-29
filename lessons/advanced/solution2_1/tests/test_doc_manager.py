@@ -2,8 +2,8 @@
 LESSON 2.1: EX. 1
 """
 import sys
-sys.path.extend(['C:\\Users\\Jediroman\\Desktop\\PyCharmProjects\\netology_lessons',
-                 'C:/Users/Jediroman/Desktop/PyCharmProjects/netology_lessons'])
+sys.path.extend(['C:\\Users\\Jediroman\\Desktop\\PyCharmProjects\\lessons',
+                 'C:/Users/Jediroman/Desktop/PyCharmProjects/lessons'])
 import unittest
 import json
 from unittest.mock import patch
