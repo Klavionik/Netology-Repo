@@ -1,33 +1,36 @@
 import json
+import sys
 from time import sleep
 
 import vkinder.api as api
 import vkinder.utils as utils
 from .auth import authorize
 from .db import AppDB, db_session
+from .exceptions import APIError
 from .globals import *
 from .types import User, Match
 
 
 class App:
 
-    def __init__(self, owner_id, token, output_amount, refresh, db=dbpath):
+    def __init__(self, token, flags, db):
         """
         Initializes an instance of the VKInder app.
 
-        :param owner_id: id of the app owner (i.e. the person, who's running the app).
         :param token: VK API token of the app owner.
         """
-        self.owner = owner_id
         self.token = token
         self.api = API_URL
         self.v = VERSION
         self.auth = {'v': self.v, 'access_token': self.token}
         self.db = AppDB(db)
-        self.refresh = refresh
-        self.output_amount = output_amount
-        self.req_fields = 'bdate,city,sex,common_count,' \
-                          'games,music,movies,interests,tv,books,personal'
+        self.refresh = flags['refresh']
+        self.export = flags['export']
+        self.output_amount = flags['output_amount']
+        self.req_fields = ','.join(['bdate', 'city', 'sex', 'common_count',
+                                    'games', 'music', 'movies', 'interests',
+                                    'tv', 'books', 'personal'])
+        self.flags = flags
 
         self.current_user = None
         self.matches = None
@@ -40,23 +43,27 @@ class App:
         :param target: target user id.
         :return: string representation of :class:`User` object.
         """
-        target_id, target_info = self._fetch_user(target)
+        try:
+            target_id, target_info = self._fetch_user(target)
+        except APIError as e:
+            if e.code == (30, 113):
+                return False
+        else:
+            with db_session(self.db.factory) as session:
+                user_in_db = self.db.get_user(target_id, session)
 
-        with db_session(self.db.factory) as session:
-            user_in_db = self.db.get_user(target_id, session)
+                if user_in_db and not self.refresh:
+                    user = User.from_database(user_in_db)
+                    self.current_user = user
+                    print(f'\n{G}{user} loaded from the database.{END}')
+                else:
+                    target_groups = self._fetch_user_groups(target_id)
+                    user = User.from_api(target_info, target_groups)
+                    self.current_user = user
+                    self.db.add_user(user, session)
+                    print(f'\n{G}{user} loaded from the API{END}')
 
-            if user_in_db and not self.refresh:
-                user = User.from_database(user_in_db)
-                self.current_user = user
-                print(f'\n{G}{user} loaded from the database.{END}')
-            else:
-                target_groups = self._fetch_user_groups(target_id)
-                user = User.from_api(target_info, target_groups)
-                self.current_user = user
-                self.db.add_user(user, session)
-                print(f'\n{G}{user} loaded from the API{END}')
-
-        return str(self.current_user)
+            return str(self.current_user)
 
     def spawn_matches(self):
         """
@@ -120,11 +127,13 @@ class App:
             else:
                 return False
 
-        path = os.path.join(data, f'{user_id}_matches.json')
-        with open(path, 'w', encoding='utf8') as f:
-            json.dump(next_matches, f, indent=2, ensure_ascii=False)
+        if self.export:
+            path = os.path.join(data, f'{user_id}_matches.json')
+            with open(path, 'w', encoding='utf8') as f:
+                json.dump(next_matches, f, indent=2, ensure_ascii=False)
 
-            return len(next_matches)
+                return len(next_matches)
+        return next_matches
 
     def _fetch_user(self, identificator):
         api_response = api.users_get(self.auth,
@@ -132,6 +141,8 @@ class App:
                                      fields=self.req_fields)
         user_info = api_response[0]
         user_id = user_info['id']
+        if user_info.get('is_closed'):
+            raise APIError({'error': {'error_code': 30}})
 
         return user_id, user_info
 
@@ -148,7 +159,9 @@ class App:
         :return: Prepared matches info
         """
 
-        match_search_criteria = self.current_user.search_criteria
+        match_search_criteria = self.current_user.search_criteria(self.flags['ignore_city'],
+                                                                  self.flags['ignore_age'],
+                                                                  self.flags['same_sex'])
         possible_matches = self._get_possible_matches(match_search_criteria)
 
         matches_ids = self._get_matches_ids(possible_matches)
@@ -283,14 +296,17 @@ class App:
         return users_list
 
 
-def startup():
+def startup(flags):
     try:
         os.mkdir(data)
     except FileExistsError:
         pass
 
+    if sys.platform == 'win32':
+        os.system('color')
+
     utils.clean_screen()
 
-    owner_token, app_owner = authorize(SAVE)
+    owner_token = authorize()
 
-    return App(app_owner, owner_token, AMOUNT, REFRESH)
+    return App(owner_token, flags, dbpath)

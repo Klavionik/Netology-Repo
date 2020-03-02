@@ -9,32 +9,29 @@ The application collects all the information it needs
 through the VK API and user input, finds the matches,
 assigns each match a score based on the likeness of
 user's and match's profile, saves matches to the database
-and exports matches from the database in JSON format files
-in descending score order.
+and prints out matches from the database in descending score order.
 """
-import os
-from vkinder import app as vkinder
-from vkinder.globals import AMOUNT, R, G, Y, END, B
+from vkinder.globals import R, G, Y, V, END, B
 
 
-def main():
+def run(app):
     """
     Options:
 
         u (user) - set current app user
         f (find) - find/refresh matches for the current user
-        n (next) - export next best matches for a user to a JSON file
+        n (next) - show next best matches for a user
         l (list) - list saved users
-        q (quit) - quit app\n
+        q (quit) - quit app
     """
 
-    os.system("color")
-    app = vkinder.startup()
     print(f'{B}{__doc__}{END}')
 
     while True:
-        print(f'{B}{main.__doc__}{END}')
-        option = input()
+        print(f'{B}{run.__doc__}{END}')
+        print(f"{B}Current user: "
+              f"{app.current_user.full_name if app.current_user else 'Not set'}\n")
+        option = input().rstrip().lower()
 
         if option == 'u':
             set_user(app)
@@ -53,8 +50,13 @@ def set_user(app):
                    "But first, enter their ID or screenname below.\n"
                    "We'll need to acquire some information about the lucky guy "
                    f"or girl.{END}\n")
+    if not target:
+        return
     new_user = app.new_user(target)
-    print(f'{G}{new_user} set as the current user.{END}')
+    if not new_user:
+        print(f"{Y}Can't found them. Maybe you've made a typo or this profile is private.{END}")
+    else:
+        print(f'{G}{new_user} set as the current user.{END}')
 
 
 def find_matches(app):
@@ -69,13 +71,23 @@ def find_matches(app):
 def next_matches(app):
     if not app.current_user:
         target = input(f'{Y}No current user set.\n'
-                       f'Enter user id to export next {AMOUNT} matches.{END}\n')
+                       f'Enter user id to get next {app.output_amount} matches.{END}\n')
     else:
         target = app.current_user.uid
 
-    exported = app.next_matches(target)
-    if exported is not False:
-        print(f'{G}{exported} records exported to the data folder.{END}')
+    matches = app.next_matches(target)
+    if matches is not False and isinstance(matches, int):
+        print(f'{G}{matches} records exported to the data folder.{END}')
+    elif matches is not False and isinstance(matches, dict):
+        for match in matches.values():
+            print(f'{V}{match["name"]} '
+                  f'{match["surname"]} '
+                  f'{match["profile"]} '
+                  f'Total score: {match["total_score"]}{END}')
+            print("3 best photos:")
+            for photo in match['photos']:
+                print(photo)
+            print()
     else:
         print(f'{R}User not found.{END}')
 
@@ -88,7 +100,3 @@ def list_users(app):
                   f'Age {user["age"]} ID {user["uid"]}{END}')
     else:
         print(f'{R}No saved users.{END}')
-
-
-if __name__ == '__main__':
-    main()

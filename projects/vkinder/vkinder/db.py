@@ -139,6 +139,8 @@ class AppDB:
                               total_score=match_object.total_score)
 
             new_photos = [Photo(match_uid=match_object.uid, link=photo['link']) for photo in photos]
+            if photos := self.has_photos(match_object.uid, session):
+                photos.delete()
             session.add_all([new_match, *new_photos])
         else:
             match.profile = match_object.profile
@@ -147,6 +149,10 @@ class AppDB:
 
             session.query(Photo).filter(Photo.match_uid == match.uid).delete()
             session.add_all([match, *new_photos])
+
+    @staticmethod
+    def has_photos(match_uid, session):
+        return session.query(Photo).filter(Photo.match_uid == match_uid)
 
     @staticmethod
     def get_user(uid, session):

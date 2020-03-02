@@ -1,5 +1,5 @@
-import os
 import configparser
+import os
 
 root = os.path.dirname(os.path.dirname(__file__))
 
@@ -21,17 +21,8 @@ CLIENT_ID = config.get('App Settings', 'ClientID',
 # service token
 SERVICE_TOKEN = config.get('App Settings', 'ServiceToken',
                            fallback=os.environ.get('SERVICE_TOKEN'))
-# chrome driver path for Selenium
-DRIVER = config.get('App Settings', 'ChromeDriver',
-                    fallback=os.environ.get('DRIVER'))
 # user-agent
 USER_AGENT = config.get('App Settings', 'UserAgent')
-# JSON output amount
-AMOUNT = config.get('App Settings', 'OutputAmount')
-# Save token to a binary file
-SAVE = config.getboolean('App Settings', 'SaveToken')
-# Ask for user info every time, default False
-REFRESH = config.getboolean('App Settings', 'RefreshUser')
 
 
 # VK API general
@@ -61,8 +52,7 @@ match_map = {'general': config['General Match'],
 # VK photo sizes map (from biggest to smallest)
 photo_sizes = {k: int(v) for k, v in config['Photo Sizes'].items()}
 
-# Match settings: score weight,
-# search age range (user's age plus/minus age bound)
+# Match settings: score weight
 PERSONAL_FACTOR = config.getint('Match Settings', 'PersonalFactor')
 INTERESTS_FACTOR = config.getint('Match Settings', 'InterestsFactor')
 FRIENDS_FACTOR = config.getint('Match Settings', 'FriendsFactor')

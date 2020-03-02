@@ -7,12 +7,13 @@ from vkinder.globals import API_URL, SERVICE_TOKEN, VERSION
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
-OtherMethods = namedtuple('Others', 'getcities execute')
+OtherMethods = namedtuple('Others', 'getcities execute getshortlink')
 
 # VK API methods
 users_api = UsersMethods(get='/users.get', search='/users.search')
 groups_api = GroupsMethods(get='/groups.get')
-others_api = OtherMethods(getcities='/database.getCities', execute='/execute')
+others_api = OtherMethods(getcities='/database.getCities', execute='/execute',
+                          getshortlink='/utils.getShortLink')
 
 
 def vkrequest(methodfunc):

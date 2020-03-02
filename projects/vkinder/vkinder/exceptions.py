@@ -2,9 +2,9 @@ class APIError(Exception):
 
     def __init__(self, response):
         if "error" in response:
-            self.body = response["error"]
-            self.message = response['error']['error_msg']
+            self.message = response['error'].get('error_msg')
+            self.code = response['error'].get('error_code')
         if "execute_errors" in response:
-            self.message = response["execute_errors"]
+            self.message = response.get("execute_errors")
             self.body = response
         super().__init__(response)

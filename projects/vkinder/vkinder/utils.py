@@ -1,10 +1,10 @@
-import re
 import os
+import re
 import sys
 
 import progressbar
 
-from .globals import photo_sizes, END, V, R
+from .globals import photo_sizes, END, V
 
 
 def cleanup(text):
@@ -92,7 +92,7 @@ def verify_bday(value):
     :return: :class:re.Match object if the given argument is correct,
     None if not correct or not a string
     """
-    pattern = re.compile(r'^\d?\d\.\d\.\d{4}$')
+    pattern = re.compile(r'^\d?\d\.\d\d\.\d{4}$')
 
     try:
         verification = re.match(pattern, value)
@@ -113,18 +113,22 @@ def progress_bar(text):
         progressbar.ProgressBar(widgets=[f'{V}{text}{END}',
                                          progressbar.Percentage(),
                                          progressbar.Bar
-                                         (marker=progressbar.AnimatedMarker(
-            fill='#',
-            fill_wrap=(
-                f'{R}',
-                '\033[0m',
-            ),
-            marker_wrap=(
-                f'{R}',
-                '\033[0m',
-            ),
-        ))])
+                                             (marker=progressbar.AnimatedMarker(
+                                             fill='#'))])
     return bar
+
+
+def sex(user_sex, same_sex):
+    if not same_sex:
+        if user_sex == 2:
+            return 1
+        else:
+            return 2
+    else:
+        if user_sex == 2:
+            return 2
+        else:
+            return 1
 
 
 def clean_screen():

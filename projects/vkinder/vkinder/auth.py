@@ -1,63 +1,66 @@
 import pickle
+import re
 from getpass import getpass
 
+import mechanize
 import requests
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.chrome.options import Options
 
 from .api import vkrequest
 from .globals import *
 from .utils import clean_screen
 
-# keeps Selenium from opening up a browser window and adds custom user-agent
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument(f'--user-agent={USER_AGENT}')
-chrome_options.add_argument('log-level=2')
-driver = webdriver.Chrome(DRIVER, chrome_options=chrome_options)
-
-allow_button = r'//*[@id="oauth_wrap_content"]/div[3]/div/div[1]/button[1]'
+br = mechanize.Browser()
+br.set_handle_robots(False)
+tokenpattern = re.compile(r'(https://login\.vk\.com/\?act=grant_access.*?html)')
 
 
-def get_token(save):
+def get_token(discard_token):
     """
     Establishes an OAuth2 session to retrieve a token for further API requests.
     Saves retrieved token to a file.
 
+    :param discard_token:
     :return: VK API token
     """
-    print(f'{Y}VKInder v0.4\nWe need to authorize you with VK{END}\n')
+    print(f'{Y}{USER_AGENT}\nWe need to authorize you with VK{END}\n')
 
     with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID),
                        redirect_uri=REDIRECT_URI,
                        scope="friends, groups, offline, photos") as vk:
         authorization_url, state = vk.authorization_url(AUTHORIZE_URL)
-
-        driver.get(authorization_url)
-        form_email = driver.find_element_by_name("email")
-        form_pass = driver.find_element_by_name("pass")
-        form_email.send_keys(input('Enter your VK email or phone number:\n'))
-        form_pass.send_keys(getpass('Enter your VK password:\n'))
-        form_email.submit()
+        br.open(authorization_url)
+        login_attempts = 3
+        while login_attempts > 0:
+            if AUTHORIZE_URL in br.geturl():
+                br.select_form(nr=0)
+                br.form['email'] = input('Enter your VK email or phone number:\n')
+                br.form['pass'] = getpass('Enter your VK password:\n')
+                br.submit()
+            else:
+                break
+            login_attempts -= 1
+        else:
+            print("Invalid login and/or password!")
+            exit()
+        if 'authcheck' in br.geturl():
+            br.select_form(nr=0)
+            br.form['code'] = input('Enter authentication code\n')
+            br.submit()
         try:
-            security_check = driver.find_element_by_name('code')
-            security_check.send_keys(input('Enter authentication code:\n'))
-            security_check.submit()
-        except NoSuchElementException:
-            pass
-        try:
-            allow = driver.find_element_by_xpath(allow_button)
-            allow.click()
-        except NoSuchElementException:
+            response = br.response()
+            decoded = response.get_data().decode('cp1251')
+            match = re.search(tokenpattern, decoded)
+            link = match.group(0)
+            br.open(link)
+        except AttributeError:
             pass
 
-        vk.token_from_fragment(driver.current_url)
+        vk.token_from_fragment(br.geturl())
         token = vk.access_token
 
-        if save:
+        if not discard_token:
             save_token(token)
 
     return token
@@ -97,27 +100,26 @@ def save_token(token):
         pickle.dump(token, f)
 
 
-def authorize(save=True):
+def authorize(discard_token=False):
     """
     Handles authorization process at the start of the application.
     Tries to read token from a file and if it fails, runs get_token()
     to obtain a new token from a user.
 
-    :param save: Boolean value, False if you don't want to save the token to a file
-    :return: Tuple (token, token owner id)
+    :param discard_token: If True saves token to a file
+    :return: Token, token owner id
     """
 
     try:
         token = open_token()
     except FileNotFoundError:
-        token = get_token(save)
+        token = get_token(discard_token)
 
     response = test_request(token)
     owner_name = response[0]['first_name']
     owner_surname = response[0]['last_name']
-    owner_id = response[0]['id']
     clean_screen()
 
     print(f"{G}Authorized as: {owner_name} {owner_surname}{END}")
 
-    return token, owner_id
+    return token

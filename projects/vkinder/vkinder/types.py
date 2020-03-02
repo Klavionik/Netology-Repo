@@ -3,7 +3,7 @@ from datetime import datetime
 
 from .api import get_cities
 from .globals import *
-from .utils import cleanup, common, verify_bday, flatten
+from .utils import cleanup, common, verify_bday, flatten, sex
 
 
 class User:
@@ -102,23 +102,31 @@ class User:
         """
         if not verify_bday(bday):
             bday = input('\nBirth date is incomplete or incorrect.'
-                         '\nPlease, enter your birth date as d.m.yyyy\n').rstrip()
-        bday = datetime.strptime(bday, '%d.%m.%Y')
+                         '\nPlease, enter your birth date as dd.mm.yyyy\n').rstrip()
+        try:
+            bday = datetime.strptime(bday, '%d.%m.%Y')
+        except ValueError:
+            print(f"{Y}Invalid data format. Age set to 18.{END}")
+            return 18
         today = datetime.today()
         return today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
 
-    @property
-    def search_criteria(self):
-        criteria = {'city': self.city,
-                    'sex': 1 if self.sex == 2 else 2,
-                    'age_from': self.age - AGE_BOUND if (self.age - AGE_BOUND) >= 18 else 18,
-                    'age_to': self.age + AGE_BOUND,
+    def search_criteria(self, ignore_city, ignore_age, same_sex):
+        age_bound = AGE_BOUND if not ignore_age else 100
+        criteria = {'city': 0 if ignore_city else self.city,
+                    'sex': sex(self.sex, same_sex),
+                    'age_from': self.age - age_bound if (self.age - age_bound) >= 18 else 18,
+                    'age_to': self.age + age_bound,
                     'has_photo': 1,
                     'count': 1000,
                     'fields': 'blacklisted,'
                               'blacklisted_by_me,'
                               'relation'}
         return criteria
+
+    @property
+    def full_name(self):
+        return f'{self.name} {self.surname}'
 
     def __repr__(self):
         return f'User {self.name} {self.surname}'
@@ -233,7 +241,7 @@ class Match(User):
 
         return groups_score
 
-    def search_criteria(self):
+    def search_criteria(self, ignore_city, ignore_age, same_sex):
         pass
 
     @classmethod
