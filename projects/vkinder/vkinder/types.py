@@ -1,8 +1,9 @@
+import os
 import pickle
 from datetime import datetime
 
+import vkinder.globals as g
 from .api import get_cities
-from .globals import *
 from .utils import cleanup, common, verify_bday, flatten, sex
 
 
@@ -27,7 +28,7 @@ class User:
     @classmethod
     def from_database(cls, db_user):
         general = {}
-        for _, cls_attr in user_map['general'].items():
+        for _, cls_attr in g.user_map['general'].items():
             general[cls_attr] = getattr(db_user, cls_attr)
         interests = pickle.loads(db_user.interests)
         personal = pickle.loads(db_user.personal)
@@ -50,22 +51,21 @@ class User:
         parsed_personal = {}
         parsed_interests = {}
 
-        for category, mapping in user_map.items():
+        for category, mapping in g.user_map.items():
             for vk_field, cls_attr in mapping.items():
-                attr = flat_info.get(vk_field, None)
+                value = flat_info.get(vk_field, None)
                 if vk_field == 'bdate':
-                    attr = cls.get_usr_age(attr)
-                elif vk_field == 'common_friends':
-                    pass  # :class:`User` object actually doesn't need this :\
-                elif not attr or attr == bad_value:
-                    attr = cls.ask_for_attribute(cls_attr)
+                    value = cls.get_usr_age(value)
+                elif not value or value == bad_value:
+                    value = cls.ask_for_attribute(cls_attr)
 
                 if category == 'personal':
-                    parsed_personal[cls_attr] = attr
+                    parsed_personal[cls_attr] = value
                 elif category == 'interests':
-                    parsed_interests[cls_attr] = attr
+                    clean_attr = cleanup(value)
+                    parsed_interests[cls_attr] = clean_attr
                 else:
-                    parsed_general[cls_attr] = attr
+                    parsed_general[cls_attr] = value
 
         return parsed_general, parsed_personal, parsed_interests
 
@@ -77,7 +77,7 @@ class User:
         :param attribute: Attribute name of :class:`User`
         :return: Attribute's value
         """
-        path = os.path.join(resources, 'output', attribute)
+        path = os.path.join(g.resources, 'output', attribute)
 
         with open(f'{path}.txt', encoding='utf8') as f:
             output = f.read().strip()
@@ -106,13 +106,13 @@ class User:
         try:
             bday = datetime.strptime(bday, '%d.%m.%Y')
         except ValueError:
-            print(f"{Y}Invalid data format. Age set to 18.{END}")
+            print(f"{g.Y}Invalid data format. Age set to 18.{g.END}")
             return 18
         today = datetime.today()
         return today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
 
     def search_criteria(self, ignore_city, ignore_age, same_sex):
-        age_bound = AGE_BOUND if not ignore_age else 100
+        age_bound = g.AGE_BOUND if not ignore_age else 100
         criteria = {'city': 0 if ignore_city else self.city,
                     'sex': sex(self.sex, same_sex),
                     'age_from': self.age - age_bound if (self.age - age_bound) >= 18 else 18,
@@ -165,7 +165,7 @@ class Match(User):
         parsed_personal = {}
         parsed_interests = {}
 
-        for category, mapping in match_map.items():
+        for category, mapping in g.match_map.items():
             for vk_field, cls_attr in mapping.items():
                 value = flat_response.get(vk_field, None)
                 if not value or value == bad_value:
@@ -179,7 +179,8 @@ class Match(User):
                 if category == 'personal':
                     parsed_personal[cls_attr] = value
                 elif category == 'interests':
-                    parsed_interests[cls_attr] = value
+                    clean_value = cleanup(value)
+                    parsed_interests[cls_attr] = clean_value
                 else:
                     parsed_info[cls_attr] = value
 
@@ -211,9 +212,7 @@ class Match(User):
             user_value = model.interests[field]
             match_value = self.interests.get(field, None)
             if match_value:
-                clean_user_interest = cleanup(user_value)
-                clean_match_interest = cleanup(match_value)
-                field_score = INTERESTS_FACTOR * common(clean_match_interest, clean_user_interest)
+                field_score = g.INTERESTS_FACTOR * common(match_value, user_value)
                 interests_score += field_score
         return interests_score
 
@@ -224,20 +223,20 @@ class Match(User):
             user_value = model.personal[field]
             match_value = self.personal.get(field, None)
             if match_value == user_value:
-                personal_score += PERSONAL_FACTOR * 1
+                personal_score += g.PERSONAL_FACTOR * 1
         return personal_score
 
     def _score_friends(self):
         friends_score = 0
 
-        friends_score += FRIENDS_FACTOR * self.common_friends
+        friends_score += g.FRIENDS_FACTOR * self.common_friends
 
         return friends_score
 
     def _score_groups(self, model):
         groups_score = 0
 
-        groups_score += GROUPS_FACTOR * common(self.groups, model.groups)
+        groups_score += g.GROUPS_FACTOR * common(self.groups, model.groups)
 
         return groups_score
 

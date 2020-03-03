@@ -1,13 +1,14 @@
 import json
+import os
 import sys
 from time import sleep
 
 import vkinder.api as api
+import vkinder.globals as g
 import vkinder.utils as utils
 from .auth import authorize
 from .db import AppDB, db_session
 from .exceptions import APIError
-from .globals import *
 from .types import User, Match
 
 
@@ -19,16 +20,11 @@ class App:
 
         :param token: VK API token of the app owner.
         """
-        self.token = token
-        self.api = API_URL
-        self.v = VERSION
-        self.auth = {'v': self.v, 'access_token': self.token}
+        self.auth = {'v': g.VERSION, 'access_token': token}
         self.db = AppDB(db)
         self.export = flags['export']
         self.output_amount = flags['output_amount']
-        self.req_fields = ','.join(['bdate', 'city', 'sex', 'common_count',
-                                    'games', 'music', 'movies', 'interests',
-                                    'tv', 'books', 'personal'])
+
         self.flags = flags
 
         self.current_user = None
@@ -36,10 +32,10 @@ class App:
     def new_user(self, target):
         """
         Collects all required data from the VK API and user input and creates a User object
-        (representing the current user, i.e. the person looking for a match).
+        (representing the current user, i.e. a person looking for a match).
 
-        :param target: target user id.
-        :return: string representation of :class:`User` object.
+        :param target: Target user id or screen name
+        :return: String representation of :class:`User` object.
         """
         try:
             target_id, target_info = self._fetch_user(target)
@@ -53,13 +49,13 @@ class App:
                 if user_in_db:
                     user = User.from_database(user_in_db)
                     self.current_user = user
-                    print(f'\n{G}{user} loaded from the database.{END}')
+                    print(f'\n{g.G}{user} loaded from the database.{g.END}')
                 else:
                     target_groups = self._fetch_user_groups(target_id)
                     user = User.from_api(target_info, target_groups)
                     self.current_user = user
                     self.db.add_user(user, session)
-                    print(f'\n{G}{user} loaded from the API{END}')
+                    print(f'\n{g.G}{user} loaded from the API{g.END}')
 
             return str(self.current_user)
 
@@ -72,10 +68,10 @@ class App:
 
     def spawn_matches(self):
         """
-        Creates a list of :class:`Match` objects using the information acquired.
+        Creates a stream of :class:`Match` objects using the information acquired
         from the VK API and processed by the application. Adds every match to the database.
 
-        :return: list of :class:`Match` objects.
+        :return: Number of found matches
         """
 
         if self.current_user:
@@ -136,7 +132,7 @@ class App:
                 return False
 
         if self.export:
-            path = os.path.join(data, f'{user_id}_matches.json')
+            path = os.path.join(g.data, f'{user_id}_matches.json')
             with open(path, 'w', encoding='utf8') as f:
                 json.dump(next_matches, f, indent=2, ensure_ascii=False)
 
@@ -144,9 +140,12 @@ class App:
         return next_matches
 
     def _fetch_user(self, identificator):
+        fields = ','.join(['bdate', 'city', 'sex',
+                           'games', 'music', 'movies', 'interests',
+                           'tv', 'books', 'personal'])
         api_response = api.users_get(self.auth,
                                      user_ids=identificator,
-                                     fields=self.req_fields)
+                                     fields=fields)
         user_info = api_response[0]
         user_id = user_info['id']
         if user_info.get('is_closed'):
@@ -173,9 +172,13 @@ class App:
         possible_matches = self._get_possible_matches(match_search_criteria)
 
         matches_ids = self._get_matches_ids(possible_matches)
+
+        fields = ','.join(['bdate', 'city', 'sex', 'common_count'
+                                                   'games', 'music', 'movies', 'interests',
+                           'tv', 'books', 'personal'])
         matches_general = api.users_get(self.auth,
                                         user_ids=matches_ids,
-                                        fields=self.req_fields)
+                                        fields=fields)
         matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
 
         return matches_general, matches_groups, matches_photos
@@ -232,7 +235,7 @@ class App:
         :param ids: List of matches ids.
         :return: String containing VKScript code.
         """
-        path = os.path.join(resources, 'vkscript.txt')
+        path = os.path.join(g.resources, 'vkscript.txt')
 
         with open(path, encoding='utf8') as f:
             code = f.read()
@@ -306,7 +309,7 @@ class App:
 
 def startup(flags):
     try:
-        os.mkdir(data)
+        os.mkdir(g.data)
     except FileExistsError:
         pass
 
@@ -317,4 +320,4 @@ def startup(flags):
 
     owner_token = authorize()
 
-    return App(owner_token, flags, dbpath)
+    return App(owner_token, flags, g.dbpath)
