@@ -25,6 +25,7 @@ def db_session(factory):
     except SQLAlchemyError as e:
         print(f'{R}Database Error:{END}', e.args)
         session.rollback()
+
     finally:
         session.close()
 
@@ -88,7 +89,8 @@ class AppDB:
         Base.metadata.create_all(self.db)
         self.factory = sessionmaker(bind=self.db)
 
-    def add_user(self, user_object, session):
+    @staticmethod
+    def add_user(user_object, session):
         """
         Adds new user to the database if it doesn't exist in the table 'users',
         otherwise updates the record.
@@ -96,74 +98,73 @@ class AppDB:
         :param user_object: :class:`User` object
         :param session: SQLAlchemy session
         """
-        user = self.get_user(user_object.uid, session)
+        new_user = User(uid=user_object.uid,
+                        name=user_object.name,
+                        surname=user_object.surname,
+                        sex=user_object.sex,
+                        age=user_object.age,
+                        city=user_object.city,
+                        interests=pickle.dumps(user_object.interests),
+                        personal=pickle.dumps(user_object.personal),
+                        groups=pickle.dumps(user_object.groups))
 
-        if not user:
-            new_user = User(uid=user_object.uid,
-                            name=user_object.name,
-                            surname=user_object.surname,
-                            sex=user_object.sex,
-                            age=user_object.age,
-                            city=user_object.city,
-                            interests=pickle.dumps(user_object.interests),
-                            personal=pickle.dumps(user_object.personal),
-                            groups=pickle.dumps(user_object.groups))
-            session.add(new_user)
-        else:
-            user.age = user_object.age
-            user.city = user_object.city
-            user.interests = pickle.dumps(user_object.interests)
-            user.personal = pickle.dumps(user_object.personal)
-            user.groups = pickle.dumps(user_object.groups)
+        session.add(new_user)
 
-            session.add(user)
-
-    def add_match(self, match_object, photos, user_uid, session):
+    @staticmethod
+    def add_match(match_object, user_uid, session):
         """
         Adds new match to the database if it doesn't exist in the table 'matches',
         otherwise updates the record.
 
         :param match_object: :Class:`Match` object
-        :param photos: List of 3 most popular photos of the match
         :param user_uid: User uid, whom the match belongs
         :param session: SQLAlchemy session
         """
-        match = self.get_match(match_object.uid, session)
+        new_match = Match(uid=match_object.uid,
+                          user_uid=user_uid,
+                          name=match_object.name,
+                          surname=match_object.surname,
+                          profile=match_object.profile,
+                          total_score=match_object.total_score)
 
-        if not match or match.uid != user_uid:
-            new_match = Match(uid=match_object.uid,
-                              user_uid=user_uid,
-                              name=match_object.name,
-                              surname=match_object.surname,
-                              profile=match_object.profile,
-                              total_score=match_object.total_score)
-
-            new_photos = [Photo(match_uid=match_object.uid, link=photo['link']) for photo in photos]
-            if photos := self.has_photos(match_object.uid, session):
-                photos.delete()
-            session.add_all([new_match, *new_photos])
-        else:
-            match.profile = match_object.profile
-            match.total_score = match_object.total_score
-            new_photos = [Photo(match_uid=match.uid, link=photo['link']) for photo in photos]
-
-            session.query(Photo).filter(Photo.match_uid == match.uid).delete()
-            session.add_all([match, *new_photos])
+        photos = [Photo(match_uid=match_object.uid,
+                        link=photo['link'])
+                  for photo in match_object.photos]
+        session.add_all([new_match, *photos])
 
     @staticmethod
-    def has_photos(match_uid, session):
-        return session.query(Photo).filter(Photo.match_uid == match_uid)
+    def update_match(match_record, match_object, session):
+
+        match_record.profile = match_object.profile
+        match_record.total_score = match_object.total_score
+        photos = [Photo(match_uid=match_record.uid, link=photo['link']) for photo in match_object.photos]
+
+        session.add_all([match_record, *photos])
 
     @staticmethod
-    def get_user(uid, session):
+    def get_photos(match_uid, session):
+        return session.query(Photo).filter(Photo.match_uid == match_uid).all()
+
+    @staticmethod
+    def delete_user(user_record, session):
+        session.delete(user_record)
+        return True
+
+    @staticmethod
+    def delete_photos(photos_records, session):
+        for record in photos_records:
+            session.delete(record)
+
+    @staticmethod
+    def get_user(user_uid, session):
         """
         Returns a User with the given id, if it exists in the table `users`.
 
-        :param uid: User id
+        :param user_uid: User id
         :param session: SQLAlchemy session
         :return: SQLAlchemy User object
         """
-        user = session.query(User).filter(User.uid == uid).first()
+        user = session.query(User).filter(User.uid == user_uid).first()
 
         if user:
             return user

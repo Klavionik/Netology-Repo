@@ -136,7 +136,7 @@ class Match(User):
 
     def __init__(self, general, personal, interest, groups, photos):
         super().__init__(general, personal, interest, groups)
-        self.photos = tuple(photos)
+        self.photos = photos
         self.common_friends = int(general['common_friends'])
         self.score = 400  # base score
         self.interests_score = 0

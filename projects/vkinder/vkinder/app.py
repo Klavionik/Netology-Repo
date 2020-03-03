@@ -24,7 +24,6 @@ class App:
         self.v = VERSION
         self.auth = {'v': self.v, 'access_token': self.token}
         self.db = AppDB(db)
-        self.refresh = flags['refresh']
         self.export = flags['export']
         self.output_amount = flags['output_amount']
         self.req_fields = ','.join(['bdate', 'city', 'sex', 'common_count',
@@ -33,7 +32,6 @@ class App:
         self.flags = flags
 
         self.current_user = None
-        self.matches = None
 
     def new_user(self, target):
         """
@@ -52,7 +50,7 @@ class App:
             with db_session(self.db.factory) as session:
                 user_in_db = self.db.get_user(target_id, session)
 
-                if user_in_db and not self.refresh:
+                if user_in_db:
                     user = User.from_database(user_in_db)
                     self.current_user = user
                     print(f'\n{G}{user} loaded from the database.{END}')
@@ -64,6 +62,13 @@ class App:
                     print(f'\n{G}{user} loaded from the API{END}')
 
             return str(self.current_user)
+
+    def delete_user(self, user_uid):
+        with db_session(self.db.factory) as session:
+            if user := self.db.get_user(user_uid, session):
+                self.db.delete_user(user, session)
+                return True
+            return False
 
     def spawn_matches(self):
         """
@@ -77,8 +82,6 @@ class App:
 
             matches_info, matches_groups, matches_photos = self._prepare_matches()
 
-            matches = []
-
             bar = utils.progress_bar("Building matches: ")
 
             for match_info, match_groups, match_photos in \
@@ -87,14 +90,19 @@ class App:
                 top3_photos = self._get_top3_photos(match_photos)
                 match_object = Match.from_api(match_info, match_groups, photos=top3_photos)
                 match_object.scoring(self.current_user)
-                matches.append(match_object)
 
                 with db_session(self.db.factory) as session:
-                    self.db.add_match(match_object, top3_photos, self.current_user.uid, session)
+                    if match := self.db.get_match(match_object.uid, session):
+                        if match.uid != self.current_user.uid:
+                            old_match_photos = self.db.get_photos(match_object.uid, session)
+                            self.db.delete_photos(old_match_photos, session)
+                            self.db.add_match(match_object, self.current_user.uid, session)
+                        else:
+                            self.db.update_match(match, match_object, session)
+                    else:
+                        self.db.add_match(match_object, self.current_user.uid, session)
 
-            self.matches = matches
-
-            return len(self.matches)
+            return len(matches_info)
 
         else:
             return False

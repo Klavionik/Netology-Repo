@@ -35,6 +35,7 @@ def get_token(discard_token):
         while login_attempts > 0:
             if AUTHORIZE_URL in br.geturl():
                 br.select_form(nr=0)
+                print(f'Login attempts left: {login_attempts}')
                 br.form['email'] = input('Enter your VK email or phone number:\n')
                 br.form['pass'] = getpass('Enter your VK password:\n')
                 br.submit()

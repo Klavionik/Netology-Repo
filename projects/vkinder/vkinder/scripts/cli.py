@@ -7,22 +7,19 @@ from vkinder import menu
 from vkinder.globals import dbpath, tokenpath
 
 
-@click.option('--refresh', '-ref', is_flag=True,
-              help="Load user from the API every time even if it exists in the database")
 @click.option('--export', '-exp', is_flag=True,
               help="Export next matches to a JSON file rather than printing to the console")
 @click.option('--output-amount', '-out', default=10, show_default=True,
               help="Amount of matches returned by 'next' menu option")
 @click.group()
 @click.pass_context
-def cli(ctx, output_amount, export, refresh):
+def cli(ctx, output_amount, export):
     """
     VKInder: Python coursework by Roman Vlasenko
     """
     ctx.ensure_object(dict)
     ctx.obj['output_amount'] = output_amount
     ctx.obj['export'] = export
-    ctx.obj['refresh'] = refresh
 
 
 @cli.command()
@@ -50,7 +47,7 @@ def cleardb():
 
 
 @cli.command()
-def logout():
+def cleartoken():
     """Delete saved token"""
     if os.path.exists(tokenpath):
         os.remove(tokenpath)

@@ -20,6 +20,7 @@ def run(app):
 
         u (user) - set current app user
         f (find) - find/refresh matches for the current user
+        d (delete) - delete user and all his matches
         n (next) - show next best matches for a user
         l (list) - list saved users
         q (quit) - quit app
@@ -37,6 +38,8 @@ def run(app):
             set_user(app)
         elif option == 'f':
             find_matches(app)
+        elif option == 'd':
+            delete_user(app)
         elif option == 'n':
             next_matches(app)
         elif option == 'l':
@@ -57,6 +60,17 @@ def set_user(app):
         print(f"{Y}Can't found them. Maybe you've made a typo or this profile is private.{END}")
     else:
         print(f'{G}{new_user} set as the current user.{END}')
+
+
+def delete_user(app):
+    target = input(f"{Y}Enter user's id to delete them from the database.\n")
+    if not target:
+        return
+    deleted = app.delete_user(target)
+    if not deleted:
+        print(f"{Y}Can't find user with ID {target}. Maybe you've made a typo.{END}")
+    else:
+        print(f'{G}User with ID {target} and all the corresponding matches have been deleted.{END}')
 
 
 def find_matches(app):

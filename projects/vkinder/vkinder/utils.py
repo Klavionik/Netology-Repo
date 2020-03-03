@@ -4,7 +4,7 @@ import sys
 
 import progressbar
 
-from .globals import photo_sizes, END, V
+from .globals import photo_sizes, END, V, B
 
 
 def cleanup(text):
@@ -92,7 +92,7 @@ def verify_bday(value):
     :return: :class:re.Match object if the given argument is correct,
     None if not correct or not a string
     """
-    pattern = re.compile(r'^\d?\d\.\d\d\.\d{4}$')
+    pattern = re.compile(r'^\d?\d\.\d?\d\.\d{4}$')
 
     try:
         verification = re.match(pattern, value)
@@ -110,11 +110,16 @@ def progress_bar(text):
     :return: :module:`progressbar2` progress bar
     """
     bar = \
-        progressbar.ProgressBar(widgets=[f'{V}{text}{END}',
+        progressbar.ProgressBar(widgets=[f'{B}{text}{END}',
                                          progressbar.Percentage(),
                                          progressbar.Bar
                                              (marker=progressbar.AnimatedMarker(
-                                             fill='#'))])
+                                             fill='#', fill_wrap=(
+                                                 f'{V}',
+                                                 f'{END}'),
+                                             marker_wrap=(
+                                                 f'{V}',
+                                                 f'{END}')))])
     return bar
 
 
