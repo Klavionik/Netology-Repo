@@ -20,7 +20,7 @@ def run(app):
 
         u (user) - set current app user
         f (find) - find/refresh matches for the current user
-        d (delete) - delete user and all his matches
+        d (delete) - delete user and all their matches
         n (next) - show next best matches for a user
         l (list) - list saved users
         q (quit) - quit app
@@ -63,7 +63,7 @@ def set_user(app):
 
 
 def delete_user(app):
-    target = input(f"{Y}Enter user's id to delete them from the database.\n")
+    target = input(f"{Y}Enter user id to delete their profile from the database.{END}\n")
     if not target:
         return
     deleted = app.delete_user(target)

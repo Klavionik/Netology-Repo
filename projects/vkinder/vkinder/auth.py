@@ -99,7 +99,7 @@ def test_request(token):
     :param token: VK API token
     :return: App owner info
     """
-    params = {'v': g.VERSION, 'access_token': token}
+    params = {'v': 5.103, 'access_token': token}
     test_response = requests.get(g.API_URL + '/users.get', params)
 
     return test_response

@@ -18,9 +18,6 @@ END = '\033[0m'  # end of coloring
 # client ID
 CLIENT_ID = config.get('App Settings', 'ClientID',
                        fallback=os.environ.get('CLIENT_ID'))
-# service token
-SERVICE_TOKEN = config.get('App Settings', 'ServiceToken',
-                           fallback=os.environ.get('SERVICE_TOKEN'))
 # user-agent
 USER_AGENT = config.get('App Settings', 'UserAgent')
 

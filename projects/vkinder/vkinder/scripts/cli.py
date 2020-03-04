@@ -7,9 +7,9 @@ from vkinder import menu
 from vkinder.globals import dbpath, tokenpath
 
 
-@click.option('--export', '-exp', is_flag=True,
+@click.option('--export', '-e', is_flag=True,
               help="Export next matches to a JSON file rather than printing to the console")
-@click.option('--output-amount', '-out', default=10, show_default=True,
+@click.option('--output-amount', '-o', default=10, show_default=True,
               help="Amount of matches returned by 'next' menu option")
 @click.group()
 @click.pass_context

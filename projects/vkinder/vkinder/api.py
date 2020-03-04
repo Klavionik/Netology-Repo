@@ -3,13 +3,12 @@ from collections import namedtuple
 import requests
 
 from vkinder.exceptions import APIError
-from vkinder.globals import API_URL, SERVICE_TOKEN, VERSION
+from vkinder.globals import API_URL
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
 OtherMethods = namedtuple('Others', 'getcities execute getshortlink')
 
-# VK API methods
 users_api = UsersMethods(get='/users.get', search='/users.search')
 groups_api = GroupsMethods(get='/groups.get')
 others_api = OtherMethods(getcities='/database.getCities', execute='/execute',
@@ -40,89 +39,88 @@ def vkrequest(methodfunc):
     return wrapper
 
 
-@vkrequest
-def users_search(auth, criteria):
-    """
-    Makes a request to the VK API `users.search` method and
-    returns the contents of the response.
+class VKApi:
 
-    :param auth: Auth parameters
-    :param criteria: Search criteria
-    :return: Matching users
-    """
-    params = {**auth, **criteria}
+    def __init__(self, api_url, api_version, token):
+        self.url = api_url
+        self.v = api_version
+        self.token = token
+        self.auth = {'v': self.v, 'access_token': self.token}
 
-    response = requests.get(API_URL + users_api.search, params=params)
+    @vkrequest
+    def users_search(self, criteria):
+        """
+        Makes a request to the VK API `users.search` method and
+        returns the contents of the response.
 
-    return response
+        :param criteria: Search criteria
+        :return: Matching users
+        """
+        params = {**self.auth, **criteria}
 
+        response = requests.get(API_URL + users_api.search, params=params)
 
-@vkrequest
-def execute(auth, code):
-    """
-    Makes a request to the VK API `execute` method and
-    returns results of the request.
+        return response
 
-    :param auth: Auth parameters
-    :param code: VKScript code
-    :return: Results of the execution
-    """
-    params = {**auth, 'code': code}
+    @vkrequest
+    def execute(self, code):
+        """
+        Makes a request to the VK API `execute` method and
+        returns results of the request.
 
-    response = requests.post(API_URL + others_api.execute, data=params)
+        :param code: VKScript code
+        :return: Results of the execution
+        """
+        params = {**self.auth, 'code': code}
 
-    return response
+        response = requests.post(API_URL + others_api.execute, data=params)
 
+        return response
 
-@vkrequest
-def groups_get(auth, user_id, count=1000):
-    """
-    Makes a request to the VK API `groups.get` method and
-    returns a list of user's groups.
+    @vkrequest
+    def groups_get(self, user_id, count=1000):
+        """
+        Makes a request to the VK API `groups.get` method and
+        returns a list of user's groups.
 
-    :param auth: Auth parameters
-    :param user_id: VK user id
-    :param count: Amount of groups to return
-    :return: List of group ids
-    """
-    params = {**auth, 'user_id': user_id, 'count': count}
+        :param user_id: VK user id
+        :param count: Amount of groups to return
+        :return: List of group ids
+        """
+        params = {**self.auth, 'user_id': user_id, 'count': count}
 
-    response = requests.get(API_URL + groups_api.get, params=params)
+        response = requests.get(API_URL + groups_api.get, params=params)
 
-    return response
+        return response
 
+    @vkrequest
+    def users_get(self, user_ids, fields):
+        """
+        Makes a request to the VK API `users.get` method and
+        returns detailed profile info of the given user ids.
 
-@vkrequest
-def users_get(auth, user_ids, fields):
-    """
-    Makes a request to the VK API `users.get` method and
-    returns detailed profile info of the given user ids.
+        :param user_ids: VK user ids (up to 1000 per request)
+        :param fields: Additional profile fields to return
+        :return: List of VK `User` objects
+        """
+        params = {**self.auth, 'user_ids': f'{user_ids}'.strip('[]'), 'fields': fields}
 
-    :param auth: Auth parameters
-    :param user_ids: VK user ids (up to 1000 per request)
-    :param fields: Additional profile fields to return
-    :return: List of VK `User` objects
-    """
-    params = {**auth, 'user_ids': f'{user_ids}'.strip('[]'), 'fields': fields}
+        response = requests.post(API_URL + users_api.get, data=params)
 
-    response = requests.post(API_URL + users_api.get, data=params)
+        return response
 
-    return response
+    @vkrequest
+    def get_cities(self, city_name, count=1):
+        """
+        Makes a request to the VK API `database.getCities` method and
+        returns the contents of the response.
 
+        :param city_name: Search query for the method
+        :param count: Number of cities to return
+        :return: List of cities
+        """
+        params = {**self.auth, 'country_id': 1, 'q': city_name, 'count': count}
 
-@vkrequest
-def get_cities(city_name, count=1):
-    """
-    Makes a request to the VK API `database.getCities` method and
-    returns the contents of the response.
+        response = requests.get(API_URL + others_api.getcities, params=params)
 
-    :param city_name: Search query for the method
-    :param count: Number of cities to return
-    :return: List of cities
-    """
-    auth = {'access_token': f'{SERVICE_TOKEN}', 'v': f'{VERSION}'}
-    params = {**auth, 'country_id': 1, 'q': city_name, 'count': count}
-
-    response = requests.get(API_URL + others_api.getcities, params=params)
-
-    return response
+        return response

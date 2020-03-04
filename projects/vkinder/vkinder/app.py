@@ -3,9 +3,9 @@ import os
 import sys
 from time import sleep
 
-import vkinder.api as api
 import vkinder.globals as g
 import vkinder.utils as utils
+from vkinder.api import VKApi
 from .auth import authorize
 from .db import AppDB, db_session
 from .exceptions import APIError
@@ -14,13 +14,13 @@ from .types import User, Match
 
 class App:
 
-    def __init__(self, token, flags, db):
+    def __init__(self, api, flags, db):
         """
         Initializes an instance of the VKInder app.
 
-        :param token: VK API token of the app owner.
+        :param api: VK API handler
         """
-        self.auth = {'v': g.VERSION, 'access_token': token}
+        self.api = api
         self.db = AppDB(db)
         self.export = flags['export']
         self.output_amount = flags['output_amount']
@@ -60,6 +60,9 @@ class App:
             return str(self.current_user)
 
     def delete_user(self, user_uid):
+        if self.current_user.uid and self.current_user.uid == user_uid:
+            self.current_user = None
+
         with db_session(self.db.factory) as session:
             if user := self.db.get_user(user_uid, session):
                 self.db.delete_user(user, session)
@@ -88,13 +91,10 @@ class App:
                 match_object.scoring(self.current_user)
 
                 with db_session(self.db.factory) as session:
-                    if match := self.db.get_match(match_object.uid, session):
-                        if match.uid != self.current_user.uid:
-                            old_match_photos = self.db.get_photos(match_object.uid, session)
-                            self.db.delete_photos(old_match_photos, session)
-                            self.db.add_match(match_object, self.current_user.uid, session)
-                        else:
-                            self.db.update_match(match, match_object, session)
+                    if match := self.db.get_match(match_object.uid,
+                                                  self.current_user.uid,
+                                                  session):
+                        self.db.update_match(match, match_object, session)
                     else:
                         self.db.add_match(match_object, self.current_user.uid, session)
 
@@ -143,11 +143,18 @@ class App:
         fields = ','.join(['bdate', 'city', 'sex',
                            'games', 'music', 'movies', 'interests',
                            'tv', 'books', 'personal'])
-        api_response = api.users_get(self.auth,
-                                     user_ids=identificator,
-                                     fields=fields)
+        api_response = self.api.users_get(user_ids=identificator,
+                                          fields=fields)
         user_info = api_response[0]
         user_id = user_info['id']
+        user_city = user_info.get('city', None)
+
+        if not user_city:
+            city = input("Looks like we don't know, where you live.\n"
+                         "What's your city of residence?")
+            city_id = self.api.get_cities(city)['items'][0]['id']
+            user_info['city'] = city_id
+
         if user_info.get('is_closed'):
             raise APIError({'error': {'error_code': 30}})
 
@@ -155,7 +162,7 @@ class App:
 
     def _fetch_user_groups(self, user_id):
 
-        user_groups = api.groups_get(self.auth, user_id=user_id)
+        user_groups = self.api.groups_get(user_id=user_id)
         return user_groups['items']
 
     def _prepare_matches(self):
@@ -176,9 +183,9 @@ class App:
         fields = ','.join(['bdate', 'city', 'sex', 'common_count'
                                                    'games', 'music', 'movies', 'interests',
                            'tv', 'books', 'personal'])
-        matches_general = api.users_get(self.auth,
-                                        user_ids=matches_ids,
-                                        fields=fields)
+        matches_general = self.api.users_get(
+            user_ids=matches_ids,
+            fields=fields)
         matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
 
         return matches_general, matches_groups, matches_photos
@@ -191,7 +198,7 @@ class App:
         :param search_criteria: Search criteria for users.search method
         :return: List of dictionaries, each describing a VK API `User` object.
         """
-        possible_matches = api.users_search(self.auth, search_criteria)['items']
+        possible_matches = self.api.users_search(search_criteria)['items']
 
         return possible_matches
 
@@ -271,7 +278,7 @@ class App:
         for ids_chunk in bar(utils.next_ids(matches_ids),
                              max_value=len(matches_ids) / 12):
             code = self._prepare_code(ids_chunk)
-            result = api.execute(self.auth, code=code)
+            result = self.api.execute(code=code)
             groups, photos = result[0], result[1]
             matches_groups.extend(groups)
             matches_photos.extend(photos)
@@ -288,22 +295,18 @@ class App:
         :param photos: list of all photos for a match.
         :return: list of top-3 photos for a match.
         """
-        photos_processed = []
+        photos_processed = [{'likes': photo['likes']['count'],
+                             'link': utils.find_largest_photo(photo['sizes'])}
+                            for photo in photos]
 
-        for photo in photos:
-            photo_processed = {'likes': photo['likes']['count'],
-                               'link': utils.find_largest_photo(photo['sizes'])}
-            photos_processed.append(photo_processed)
-
-        return sorted(photos_processed, key=lambda x: x['likes'], reverse=True)[:3]
+        return sorted(photos_processed, key=lambda photo: photo['likes'], reverse=True)[:3]
 
     @staticmethod
     def _make_list(db_users_list):
-        users_list = []
+        users_list = [{'name': user.name, 'surname': user.surname,
+                       'age': user.age, 'uid': user.uid}
+                      for user in db_users_list]
 
-        for user in db_users_list:
-            users_list.append({'name': user.name, 'surname': user.surname,
-                               'age': user.age, 'uid': user.uid})
         return users_list
 
 
@@ -313,11 +316,12 @@ def startup(flags):
     except FileExistsError:
         pass
 
-    if sys.platform == 'win32':
+    if sys.platform.startswith('win'):
         os.system('color')
 
     utils.clean_screen()
 
     owner_token = authorize()
+    api = VKApi(g.API_URL, g.VERSION, owner_token)
 
-    return App(owner_token, flags, g.dbpath)
+    return App(api, flags, g.dbpath)

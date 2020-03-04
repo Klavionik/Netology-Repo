@@ -3,7 +3,6 @@ import pickle
 from datetime import datetime
 
 import vkinder.globals as g
-from .api import get_cities
 from .utils import cleanup, common, verify_bday, flatten, sex
 
 
@@ -18,7 +17,7 @@ class User:
         self.city = general['city']
         self.interests = interests
         self.personal = personal
-        self.groups = tuple(groups)
+        self.groups = groups
 
     @classmethod
     def from_api(cls, info, groups, *args, **kwargs):
@@ -28,8 +27,10 @@ class User:
     @classmethod
     def from_database(cls, db_user):
         general = {}
+
         for _, cls_attr in g.user_map['general'].items():
             general[cls_attr] = getattr(db_user, cls_attr)
+
         interests = pickle.loads(db_user.interests)
         personal = pickle.loads(db_user.personal)
         groups = pickle.loads(db_user.groups)
@@ -57,7 +58,7 @@ class User:
                 if vk_field == 'bdate':
                     value = cls.get_usr_age(value)
                 elif not value or value == bad_value:
-                    value = cls.ask_for_attribute(cls_attr)
+                    value = cls.ask_user(cls_attr)
 
                 if category == 'personal':
                     parsed_personal[cls_attr] = value
@@ -70,27 +71,23 @@ class User:
         return parsed_general, parsed_personal, parsed_interests
 
     @classmethod
-    def ask_for_attribute(cls, attribute):
+    def ask_user(cls, attribute):
         """
         Handles the case, when user information is incomplete and requires clarification.
 
-        :param attribute: Attribute name of :class:`User`
+        :param attribute: Attribute of :class:`User`
         :return: Attribute's value
         """
         path = os.path.join(g.resources, 'output', attribute)
 
         with open(f'{path}.txt', encoding='utf8') as f:
-            output = f.read().strip()
-        value = input(f'\n{output}\n\n')
+            question = f.read().strip()
+        answer = input(f'\n{question}\n\n')
 
-        if attribute == 'city':
-            city_id = get_cities(value)
-            value = city_id['items'][0]['id']
+        if answer.isdigit():
+            answer = int(answer)
 
-        if isinstance(value, str) and value.isdigit():
-            value = int(value)
-
-        return value
+        return answer
 
     @classmethod
     def get_usr_age(cls, bday):
@@ -159,7 +156,6 @@ class Match(User):
         :return: Parsed user profile info
         """
         flat_response = flatten(info)
-        bad_value = ''
 
         parsed_info = {}
         parsed_personal = {}
@@ -167,8 +163,8 @@ class Match(User):
 
         for category, mapping in g.match_map.items():
             for vk_field, cls_attr in mapping.items():
-                value = flat_response.get(vk_field, None)
-                if not value or value == bad_value:
+                value = flat_response.get(vk_field, '')
+                if vk_field == 'common_friends' and not value:
                     value = False
                 if vk_field == 'bdate':
                     if not verify_bday(value):
@@ -248,5 +244,5 @@ class Match(User):
         pass
 
     @classmethod
-    def ask_for_attribute(cls, attribute):
+    def ask_user(cls, attribute):
         pass

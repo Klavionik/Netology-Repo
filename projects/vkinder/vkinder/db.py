@@ -5,7 +5,7 @@ from sqlalchemy import Column, Integer, String, BLOB, Boolean, ForeignKey
 from sqlalchemy import create_engine, desc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, backref, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker
 
 from .globals import R, END
 
@@ -23,7 +23,7 @@ def db_session(factory):
         yield session
         session.commit()
     except SQLAlchemyError as e:
-        print(f'{R}Database Error:{END}', e.args)
+        print(f'{R}Database Error:{END}', e.args[0])
         session.rollback()
 
     finally:
@@ -43,6 +43,7 @@ class User(Base):
     interests = Column(BLOB)
     personal = Column(BLOB)
     groups = Column(BLOB)
+    matches = relationship('Match', cascade='save-update, merge, delete')
 
     def __repr__(self):
         return f'User ID{self.uid} Name: {self.name} Surname: {self.surname}'
@@ -53,14 +54,13 @@ class Match(Base):
 
     id = Column(Integer, primary_key=True)
     uid = Column(Integer)
-    user_uid = Column(Integer, ForeignKey('users.uid', ondelete='CASCADE',
-                                          onupdate='CASCADE'))
+    user_uid = Column(Integer, ForeignKey('users.uid'))
     name = Column(String)
     surname = Column(String)
     profile = Column(String(32))
     total_score = Column(Integer)
     seen = Column(Boolean, default=False)
-    user = relationship('User', backref=backref('matches'))
+    photos = relationship('Photo', cascade='save-update, merge, delete')
 
     def __repr__(self):
         return f'Match ID{self.uid} Name: {self.name} Surname: {self.surname}'
@@ -70,10 +70,8 @@ class Photo(Base):
     __tablename__ = 'photos'
 
     id = Column(Integer, primary_key=True)
-    match_uid = Column(Integer, ForeignKey('matches.uid', ondelete='CASCADE',
-                                           onupdate='CASCADE'))
+    match_id = Column(Integer, ForeignKey('matches.id'))
     link = Column(String)
-    owner = relationship('Match', backref=backref('photos'))
 
 
 class AppDB:
@@ -127,23 +125,24 @@ class AppDB:
                           profile=match_object.profile,
                           total_score=match_object.total_score)
 
-        photos = [Photo(match_uid=match_object.uid,
+        session.add(new_match)
+        session.flush()
+
+        photos = [Photo(match_id=new_match.id,
                         link=photo['link'])
                   for photo in match_object.photos]
-        session.add_all([new_match, *photos])
+
+        session.add_all(photos)
 
     @staticmethod
     def update_match(match_record, match_object, session):
 
         match_record.profile = match_object.profile
         match_record.total_score = match_object.total_score
-        photos = [Photo(match_uid=match_record.uid, link=photo['link']) for photo in match_object.photos]
 
-        session.add_all([match_record, *photos])
-
-    @staticmethod
-    def get_photos(match_uid, session):
-        return session.query(Photo).filter(Photo.match_uid == match_uid).all()
+        photos = session.query(Photo).filter(Photo.match_id == match_record.id).all()
+        for index, photo in enumerate(photos):
+            photo.link = match_object.photos[index]['link']
 
     @staticmethod
     def delete_user(user_record, session):
@@ -170,7 +169,7 @@ class AppDB:
             return user
 
     @staticmethod
-    def get_match(match_uid, session):
+    def get_match(match_uid, user_uid, session):
         """
         Returns a Match instance with the given id, if it exists in the table `matches`.
 
@@ -178,7 +177,9 @@ class AppDB:
         :param session: SQLAlchemy session
         :return: SQLAlchemy Match object
         """
-        match = session.query(Match).filter(Match.uid == match_uid).first()
+        query = session.query(Match)
+        filtered = query.filter(Match.uid == match_uid, Match.user_uid == user_uid)
+        match = filtered.first()
 
         if match:
             return match
@@ -207,7 +208,7 @@ class AppDB:
                                  'profile': match.profile,
                                  'total_score': match.total_score}
 
-            photos = photos_query.filter(Photo.match_uid == match.uid).all()
+            photos = photos_query.filter(Photo.match_id == match.id).all()
             matches[match.id]['photos'] = [photo[0] for photo in photos]
             match.seen = True
 
