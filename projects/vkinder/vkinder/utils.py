@@ -4,7 +4,10 @@ import sys
 
 import progressbar
 
-from .globals import photo_sizes, END, V, B
+from . import config, END, V, B
+
+# VK photo sizes map (from biggest to smallest)
+photo_sizes = {k: int(v) for k, v in config['Photo Sizes'].items()}
 
 
 def cleanup(text):
@@ -86,7 +89,7 @@ def next_ids(ids, amount=12):
 
 def verify_bday(value):
     """
-    Validates if a given date string conforms to the format used for get_usr_age function.
+    Validates if a given date string conforms to the format used for find_age function.
 
     :param value: Birth date of the current user
     :return: :class:re.Match object if the given argument is correct,
@@ -119,11 +122,11 @@ def progress_bar(text):
                                                  f'{END}'),
                                              marker_wrap=(
                                                  f'{V}',
-                                                 f'{END}')))])
+                                                 f'{END}')))], redirect_stdout=True)
     return bar
 
 
-def sex(user_sex, same_sex):
+def calculate_sex(user_sex, same_sex):
     if not same_sex:
         if user_sex == 2:
             return 1

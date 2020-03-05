@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
-from .globals import R, END
+from . import R, END
 
 Base = declarative_base()
 
@@ -25,7 +25,6 @@ def db_session(factory):
     except SQLAlchemyError as e:
         print(f'{R}Database Error:{END}', e.args[0])
         session.rollback()
-
     finally:
         session.close()
 

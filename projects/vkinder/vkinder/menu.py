@@ -57,7 +57,8 @@ def set_user(app):
         return
     new_user = app.new_user(target)
     if not new_user:
-        print(f"{Y}Can't found them. Maybe you've made a typo or this profile is private.{END}")
+        print(f"{Y}Can't found them.\nMaybe you've made a typo, "
+              f"this profile is private, deleted or banned.{END}")
     else:
         print(f'{G}{new_user} set as the current user.{END}')
 
@@ -70,7 +71,8 @@ def delete_user(app):
     if not deleted:
         print(f"{Y}Can't find user with ID {target}. Maybe you've made a typo.{END}")
     else:
-        print(f'{G}User with ID {target} and all the corresponding matches have been deleted.{END}')
+        print(f'{G}User with ID {target} and all the corresponding matches '
+              f'have been deleted.{END}')
 
 
 def find_matches(app):
@@ -98,7 +100,7 @@ def next_matches(app):
                   f'{match["surname"]} '
                   f'{match["profile"]} '
                   f'Total score: {match["total_score"]}{END}')
-            print("3 best photos:")
+            print("Best photos:")
             for photo in match['photos']:
                 print(photo)
             print()

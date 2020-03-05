@@ -1,126 +1,229 @@
+import logging
+import os
+import pickle
+import re
 from collections import namedtuple
+from getpass import getpass
+from time import sleep
 
+import mechanize
 import requests
+# noinspection PyPackageRequirements
+from oauthlib.oauth2 import MobileApplicationClient
+from requests_oauthlib import OAuth2Session
 
-from vkinder.exceptions import APIError
-from vkinder.globals import API_URL
+from vkinder.exceptions import APIError, InternalServerError, TooManyRequestsPerSecond
+from . import config, root, tokenpath, Y, END, G
+from .utils import clean_screen
+
+CLIENT_ID = config.get('App Settings', 'ClientID',
+                       fallback=os.environ.get('CLIENT_ID'))
+API_URL = config.get('VK API', 'APIUrl')
+AUTHORIZE_URL = config.get('VK API', 'AuthorizeUrl')
+REDIRECT_URI = config.get('VK API', 'RedirectUrl')
+VERSION = config.get('VK API', 'Version')
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
 OtherMethods = namedtuple('Others', 'getcities execute getshortlink')
 
-users_api = UsersMethods(get='/users.get', search='/users.search')
-groups_api = GroupsMethods(get='/groups.get')
-others_api = OtherMethods(getcities='/database.getCities', execute='/execute',
-                          getshortlink='/utils.getShortLink')
+logger = logging.getLogger(__name__)
+
+logger.setLevel(logging.DEBUG)
+fileh = logging.FileHandler(os.path.join(root, 'api.log'))
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+fileh.setFormatter(formatter)
+logger.addHandler(fileh)
 
 
-def vkrequest(methodfunc):
-    """
-    Wraps a function that returns a response from the VK API,
-    checks if received response is correct and unpacks it.
-    Raises `requests` lib `HTTPError` exception if response status
-    if not 200 `OK`.
+def open_token():
+    with open(tokenpath, "rb") as f:
+        token = pickle.load(f)
 
-    :param methodfunc: Function that returns a response object
-    :return: Unpacked response
-    """
-    def wrapper(*args, **kwargs):
-        response = methodfunc(*args, **kwargs)
+    return token
 
-        if response.status_code == 200:
-            json_response = response.json()
-            if ('response' not in json_response) or ("execute_errors" in json_response):
-                raise APIError(json_response)
 
-            return json_response['response']
-        else:
-            response.raise_for_status()
-    return wrapper
+def save_token(token):
+    with open(tokenpath, "wb") as f:
+        pickle.dump(token, f)
 
 
 class VKApi:
 
-    def __init__(self, api_url, api_version, token):
+    def __init__(self, api_url=API_URL, api_version=VERSION):
         self.url = api_url
         self.v = api_version
-        self.token = token
+        self.token = self.authorize()
         self.auth = {'v': self.v, 'access_token': self.token}
+        self.users = UsersMethods(get='/users.get', search='/users.search')
+        self.groups = GroupsMethods(get='/groups.get')
+        self.others = OtherMethods(getcities='/database.getCities', execute='/execute',
+                                   getshortlink='/utils.getShortLink')
 
-    @vkrequest
-    def users_search(self, criteria):
+        self._test_request()
+
+    def authorize(self, discard_token=False):
         """
-        Makes a request to the VK API `users.search` method and
-        returns the contents of the response.
+        Handles authorization process at the start of the application.
+        Tries to read token from a file and if it fails, runs get_token()
+        to obtain a new token from a user.
 
-        :param criteria: Search criteria
-        :return: Matching users
+        :param discard_token: If True save token to a file
+        :return: VK API token
         """
-        params = {**self.auth, **criteria}
 
-        response = requests.get(API_URL + users_api.search, params=params)
+        try:
+            token = open_token()
+        except FileNotFoundError:
+            token = self._get_token(discard_token)
+
+        return token
+
+    def users_search(self, **kwargs):
+        return self._get_response(self.url + self.users.search,
+                                  request_params=kwargs)
+
+    def execute(self, **kwargs):
+        return self._get_response(self.url + self.others.execute,
+                                  request_params=kwargs)
+
+    def groups_get(self, **kwargs):
+        return self._get_response(self.url + self.groups.get,
+                                  request_params=kwargs)
+
+    def users_get(self, **kwargs):
+        return self._get_response(self.url + self.users.get,
+                                  request_params=kwargs)
+
+    def get_cities(self, **kwargs):
+        return self._get_response(self.url + self.others.getcities,
+                                  request_params=kwargs)
+
+    def _get_response(self, url, request_params):
+
+        params = {**self.auth, **request_params}
+
+        response = None
+        success = False
+        retry = 5
+
+        while not success:
+            try:
+                logger.debug(f'Request started: method {url}\nParameters {request_params}')
+                response = self._send_request(url, params)
+            except TooManyRequestsPerSecond:
+                logger.debug('Handling TooManyRequestsPerSecond exception')
+                sleep(0.3)
+                continue
+            except InternalServerError:
+                logger.debug('Handling InternalServerError exception, '
+                             f'attempts left {retry}')
+                if retry > 0:
+                    retry -= 1
+                    continue
+                else:
+                    raise
+            except APIError:
+                return False
+            else:
+                logger.debug(f'Response acquired')
+                success = True
 
         return response
 
-    @vkrequest
-    def execute(self, code):
+    @staticmethod
+    def _send_request(url, params):
+
+        response = requests.request('POST', url, data=params, timeout=10)
+
+        if response.status_code == 200:
+            json_response = response.json()
+
+            if error := json_response.get('error'):
+                if error['error_code'] == 6:
+                    raise TooManyRequestsPerSecond('VK API allows only 3 requests/sec',
+                                                   error=error)
+                if error['error_code'] == 10:
+                    raise InternalServerError('VK API internal server error',
+                                              error=error)
+                else:
+                    raise APIError('VK API general error', error=error)
+
+            return json_response['response']
+        else:
+            response.raise_for_status()
+
+    def _get_token(self, discard_token):
         """
-        Makes a request to the VK API `execute` method and
-        returns results of the request.
+        Establishes an OAuth2 session to retrieve a token for further API requests.
+        Saves retrieved token to a file.
 
-        :param code: VKScript code
-        :return: Results of the execution
+        :param discard_token: If True save token to a file
+        :return: VK API token
         """
-        params = {**self.auth, 'code': code}
+        print(f'{Y}VKInder\nWe need to authorize you with VK{END}\n')
 
-        response = requests.post(API_URL + others_api.execute, data=params)
+        with OAuth2Session(client=MobileApplicationClient(client_id=CLIENT_ID),
+                           redirect_uri=REDIRECT_URI,
+                           scope="friends, groups, offline, photos") as vk:
+            authorization_url, state = vk.authorization_url(AUTHORIZE_URL)
+            tokenurl = self._login(authorization_url)
+            vk.token_from_fragment(tokenurl)
+            token = vk.access_token
 
-        return response
+            if not discard_token:
+                save_token(token)
 
-    @vkrequest
-    def groups_get(self, user_id, count=1000):
-        """
-        Makes a request to the VK API `groups.get` method and
-        returns a list of user's groups.
+        return token
 
-        :param user_id: VK user id
-        :param count: Amount of groups to return
-        :return: List of group ids
-        """
-        params = {**self.auth, 'user_id': user_id, 'count': count}
+    @staticmethod
+    def _login(authorization_url, login_attempts=3):
+        browser = mechanize.Browser()
+        browser.set_handle_robots(False)
+        allowlink = re.compile(r'(https://login\.vk\.com/\?act=grant_access.*?html)')
 
-        response = requests.get(API_URL + groups_api.get, params=params)
+        browser.open(authorization_url)
+        while login_attempts:
+            if AUTHORIZE_URL in browser.geturl():
+                browser.select_form(nr=0)
+                print(f'Login attempts left: {login_attempts}')
+                browser.form['email'] = input('Enter your VK email or phone number:\n')
+                browser.form['pass'] = getpass('Enter your VK password:\n')
+                browser.submit()
+            else:
+                break
+            login_attempts -= 1
+        else:
+            print("Invalid login and/or password!")
+            exit()
+        if 'authcheck' in browser.geturl():
+            browser.select_form(nr=0)
+            browser.form['code'] = input('Enter authentication code\n')
+            browser.submit()
+        try:
+            raw_response = browser.response()
+            decoded_response = raw_response.get_data().decode('cp1251')
+            match = re.search(allowlink, decoded_response)
+            link = match.group(0)
+            permission = input("You are about to grant next permissions to this app:\n"
+                               "Access to friends\n"
+                               "Access to photos\n"
+                               "Access to API at any time\n\n"
+                               "Proceed? y/n").lower().rstrip()
+            if permission != 'y':
+                print('Aborted')
+                exit()
+            browser.open(link)
+        except AttributeError:
+            pass
 
-        return response
+        tokenurl = browser.geturl()
+        return tokenurl
 
-    @vkrequest
-    def users_get(self, user_ids, fields):
-        """
-        Makes a request to the VK API `users.get` method and
-        returns detailed profile info of the given user ids.
+    def _test_request(self):
+        response = self.users_get()
+        owner_name = response[0]['first_name']
+        owner_surname = response[0]['last_name']
+        clean_screen()
 
-        :param user_ids: VK user ids (up to 1000 per request)
-        :param fields: Additional profile fields to return
-        :return: List of VK `User` objects
-        """
-        params = {**self.auth, 'user_ids': f'{user_ids}'.strip('[]'), 'fields': fields}
-
-        response = requests.post(API_URL + users_api.get, data=params)
-
-        return response
-
-    @vkrequest
-    def get_cities(self, city_name, count=1):
-        """
-        Makes a request to the VK API `database.getCities` method and
-        returns the contents of the response.
-
-        :param city_name: Search query for the method
-        :param count: Number of cities to return
-        :return: List of cities
-        """
-        params = {**self.auth, 'country_id': 1, 'q': city_name, 'count': count}
-
-        response = requests.get(API_URL + others_api.getcities, params=params)
-
-        return response
+        print(f"{G}Authorized as: {owner_name} {owner_surname}{END}")

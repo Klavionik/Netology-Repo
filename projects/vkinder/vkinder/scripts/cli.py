@@ -3,8 +3,8 @@ import os.path
 import click
 
 from vkinder import app
+from vkinder import dbpath, tokenpath
 from vkinder import menu
-from vkinder.globals import dbpath, tokenpath
 
 
 @click.option('--export', '-e', is_flag=True,

@@ -2,39 +2,66 @@ import os
 import pickle
 from datetime import datetime
 
-import vkinder.globals as g
-from .utils import cleanup, common, verify_bday, flatten, sex
+from . import config, Y, END, resources
+from .utils import cleanup, common, verify_bday, flatten, calculate_sex
+
+# VK user object item fields -> :class:`User` attributes mapping
+user_map = {'general': config['General User'],
+            'interests': config['Interests'],
+            'personal': config['Personal']}
+
+# VK user object item fields -> :class:`Match` attributes mapping
+match_map = {'general': config['General Match'],
+             'interests': config['Interests'],
+             'personal': config['Personal']}
+
+# Match settings: score weight
+PERSONAL_FACTOR = config.getint('Match Settings', 'PersonalFactor')
+INTERESTS_FACTOR = config.getint('Match Settings', 'InterestsFactor')
+FRIENDS_FACTOR = config.getint('Match Settings', 'FriendsFactor')
+GROUPS_FACTOR = config.getint('Match Settings', 'GroupsFactor')
+AGE_BOUND = config.getint('Match Settings', 'AgeBound')
 
 
 class User:
 
-    def __init__(self, general, personal, interests, groups):
-        self.uid = general['uid']
-        self.name = general['name']
-        self.surname = general['surname']
-        self.sex = general['sex']
-        self.age = general['age']
-        self.city = general['city']
+    def __init__(self, uid, name, surname, sex, age, city, personal, interests, groups):
+        self.uid = uid
+        self.name = name
+        self.surname = surname
+        self.sex = sex
+        self.age = age
+        self.city = city
         self.interests = interests
         self.personal = personal
         self.groups = groups
 
+    def __repr__(self):
+        return f'User {self.name} {self.surname}'
+
     @classmethod
-    def from_api(cls, info, groups, *args, **kwargs):
+    def from_api(cls, info, groups):
         general, personal, interests = cls.parse(info)
-        return cls(general, personal, interests, groups)
+        return cls(general['uid'],
+                   general['name'],
+                   general['surname'],
+                   general['sex'],
+                   general['age'],
+                   general['city'], personal, interests, groups)
 
     @classmethod
     def from_database(cls, db_user):
-        general = {}
-
-        for _, cls_attr in g.user_map['general'].items():
-            general[cls_attr] = getattr(db_user, cls_attr)
 
         interests = pickle.loads(db_user.interests)
         personal = pickle.loads(db_user.personal)
         groups = pickle.loads(db_user.groups)
-        return cls(general, personal, interests, groups)
+
+        return cls(db_user.uid,
+                   db_user.name,
+                   db_user.surname,
+                   db_user.sex,
+                   db_user.age,
+                   db_user.city, personal, interests, groups)
 
     @classmethod
     def parse(cls, info):
@@ -52,11 +79,11 @@ class User:
         parsed_personal = {}
         parsed_interests = {}
 
-        for category, mapping in g.user_map.items():
+        for category, mapping in user_map.items():
             for vk_field, cls_attr in mapping.items():
-                value = flat_info.get(vk_field, None)
+                value = flat_info.get(vk_field, '')
                 if vk_field == 'bdate':
-                    value = cls.get_usr_age(value)
+                    value = cls.find_age(value)
                 elif not value or value == bad_value:
                     value = cls.ask_user(cls_attr)
 
@@ -78,7 +105,7 @@ class User:
         :param attribute: Attribute of :class:`User`
         :return: Attribute's value
         """
-        path = os.path.join(g.resources, 'output', attribute)
+        path = os.path.join(resources, 'output', attribute)
 
         with open(f'{path}.txt', encoding='utf8') as f:
             question = f.read().strip()
@@ -90,7 +117,7 @@ class User:
         return answer
 
     @classmethod
-    def get_usr_age(cls, bday):
+    def find_age(cls, bday):
         """
         Takes the current user's birth date and returns their age.
 
@@ -98,20 +125,22 @@ class User:
         :return: Exact user age
         """
         if not verify_bday(bday):
-            bday = input('\nBirth date is incomplete or incorrect.'
-                         '\nPlease, enter your birth date as dd.mm.yyyy\n').rstrip()
+            bday = input('\nBirth date is incomplete or incorrect.\n'
+                         'Please, enter your birth date as dd.mm.yyyy.\n\n')
+
         try:
             bday = datetime.strptime(bday, '%d.%m.%Y')
         except ValueError:
-            print(f"{g.Y}Invalid data format. Age set to 18.{g.END}")
+            print(f"{Y}Invalid data format. Age set to 18.{END}")
             return 18
+
         today = datetime.today()
         return today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
 
     def search_criteria(self, ignore_city, ignore_age, same_sex):
-        age_bound = g.AGE_BOUND if not ignore_age else 100
+        age_bound = AGE_BOUND if not ignore_age else 100
         criteria = {'city': 0 if ignore_city else self.city,
-                    'sex': sex(self.sex, same_sex),
+                    'sex': calculate_sex(self.sex, same_sex),
                     'age_from': self.age - age_bound if (self.age - age_bound) >= 18 else 18,
                     'age_to': self.age + age_bound,
                     'has_photo': 1,
@@ -125,26 +154,32 @@ class User:
     def full_name(self):
         return f'{self.name} {self.surname}'
 
-    def __repr__(self):
-        return f'User {self.name} {self.surname}'
 
+class Match:
 
-class Match(User):
-
-    def __init__(self, general, personal, interest, groups, photos):
-        super().__init__(general, personal, interest, groups)
+    def __init__(self, general, personal, interests, groups, photos):
+        self.uid = general['uid']
+        self.name = general['name']
+        self.surname = general['surname']
+        self.common_friends = general['common_friends']
+        self.interests = interests
+        self.personal = personal
+        self.groups = groups
         self.photos = photos
-        self.common_friends = int(general['common_friends'])
+
         self.score = 400  # base score
         self.interests_score = 0
         self.personal_score = 0
         self.friends_score = 0
         self.groups_score = 0
 
+    def __repr__(self):
+        return f'Match {self.name} {self.surname}'
+
     @classmethod
-    def from_api(cls, info, groups, *args, **kwargs):
+    def from_api(cls, info, groups, photos):
         general, personal, interests = cls.parse(info)
-        return cls(general, personal, interests, groups, kwargs['photos'])
+        return cls(general, personal, interests, groups, photos)
 
     @classmethod
     def parse(cls, info):
@@ -161,16 +196,11 @@ class Match(User):
         parsed_personal = {}
         parsed_interests = {}
 
-        for category, mapping in g.match_map.items():
+        for category, mapping in match_map.items():
             for vk_field, cls_attr in mapping.items():
                 value = flat_response.get(vk_field, '')
                 if vk_field == 'common_friends' and not value:
-                    value = False
-                if vk_field == 'bdate':
-                    if not verify_bday(value):
-                        value = 'Unknown'
-                    else:
-                        value = cls.get_usr_age(value)
+                    value = 0
 
                 if category == 'personal':
                     parsed_personal[cls_attr] = value
@@ -192,9 +222,6 @@ class Match(User):
     def profile(self):
         return f"https://vk.com/id{self.uid}"
 
-    def __repr__(self):
-        return f'Match {self.name} {self.surname} {self.age}'
-
     def scoring(self, model):
         self.interests_score = self._score_interests(model)
         self.personal_score = self._score_personal(model)
@@ -208,7 +235,7 @@ class Match(User):
             user_value = model.interests[field]
             match_value = self.interests.get(field, None)
             if match_value:
-                field_score = g.INTERESTS_FACTOR * common(match_value, user_value)
+                field_score = INTERESTS_FACTOR * common(match_value, user_value)
                 interests_score += field_score
         return interests_score
 
@@ -219,30 +246,19 @@ class Match(User):
             user_value = model.personal[field]
             match_value = self.personal.get(field, None)
             if match_value == user_value:
-                personal_score += g.PERSONAL_FACTOR * 1
+                personal_score += PERSONAL_FACTOR * 1
         return personal_score
 
     def _score_friends(self):
         friends_score = 0
 
-        friends_score += g.FRIENDS_FACTOR * self.common_friends
+        friends_score += FRIENDS_FACTOR * self.common_friends
 
         return friends_score
 
     def _score_groups(self, model):
         groups_score = 0
 
-        groups_score += g.GROUPS_FACTOR * common(self.groups, model.groups)
+        groups_score += GROUPS_FACTOR * common(self.groups, model.groups)
 
         return groups_score
-
-    def search_criteria(self, ignore_city, ignore_age, same_sex):
-        pass
-
-    @classmethod
-    def from_database(cls, db_user):
-        pass
-
-    @classmethod
-    def ask_user(cls, attribute):
-        pass

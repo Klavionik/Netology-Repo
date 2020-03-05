@@ -3,10 +3,9 @@ import os
 import sys
 from time import sleep
 
-import vkinder.globals as g
 import vkinder.utils as utils
-from vkinder.api import VKApi
-from .auth import authorize
+from . import resources, data, G, END, dbpath
+from .api import VKApi
 from .db import AppDB, db_session
 from .exceptions import APIError
 from .types import User, Match
@@ -40,7 +39,7 @@ class App:
         try:
             target_id, target_info = self._fetch_user(target)
         except APIError as e:
-            if e.code == (30, 113):
+            if e.code == (30, 113, 18):
                 return False
         else:
             with db_session(self.db.factory) as session:
@@ -49,18 +48,27 @@ class App:
                 if user_in_db:
                     user = User.from_database(user_in_db)
                     self.current_user = user
-                    print(f'\n{g.G}{user} loaded from the database.{g.END}')
+                    print(f'\n{G}{user} loaded from the database.{END}')
                 else:
+
+                    if not target_info.get('city', None):
+                        city = input("Looks like we don't know, where you live.\n"
+                                     "What's your city of residence?\n")
+                        city_id = self.api.get_cities(country_id=1,
+                                                      city=city,
+                                                      count=1)['items'][0]['id']
+                        target_info['city.id'] = city_id
+
                     target_groups = self._fetch_user_groups(target_id)
                     user = User.from_api(target_info, target_groups)
                     self.current_user = user
                     self.db.add_user(user, session)
-                    print(f'\n{g.G}{user} loaded from the API{g.END}')
+                    print(f'\n{G}{user} loaded from the API{END}')
 
             return str(self.current_user)
 
     def delete_user(self, user_uid):
-        if self.current_user.uid and self.current_user.uid == user_uid:
+        if self.current_user and (self.current_user.uid == int(user_uid)):
             self.current_user = None
 
         with db_session(self.db.factory) as session:
@@ -87,7 +95,7 @@ class App:
                     bar(zip(matches_info, matches_groups, matches_photos),
                         max_value=len(matches_info)):
                 top3_photos = self._get_top3_photos(match_photos)
-                match_object = Match.from_api(match_info, match_groups, photos=top3_photos)
+                match_object = Match.from_api(match_info, match_groups, top3_photos)
                 match_object.scoring(self.current_user)
 
                 with db_session(self.db.factory) as session:
@@ -132,7 +140,7 @@ class App:
                 return False
 
         if self.export:
-            path = os.path.join(g.data, f'{user_id}_matches.json')
+            path = os.path.join(data, f'{user_id}_matches.json')
             with open(path, 'w', encoding='utf8') as f:
                 json.dump(next_matches, f, indent=2, ensure_ascii=False)
 
@@ -147,16 +155,12 @@ class App:
                                           fields=fields)
         user_info = api_response[0]
         user_id = user_info['id']
-        user_city = user_info.get('city', None)
-
-        if not user_city:
-            city = input("Looks like we don't know, where you live.\n"
-                         "What's your city of residence?")
-            city_id = self.api.get_cities(city)['items'][0]['id']
-            user_info['city'] = city_id
 
         if user_info.get('is_closed'):
             raise APIError({'error': {'error_code': 30}})
+
+        if user_info.get('deactivated'):
+            raise APIError({'error': {'error_code': 18}})
 
         return user_id, user_info
 
@@ -184,7 +188,7 @@ class App:
                                                    'games', 'music', 'movies', 'interests',
                            'tv', 'books', 'personal'])
         matches_general = self.api.users_get(
-            user_ids=matches_ids,
+            user_ids=str(matches_ids).strip('[]'),
             fields=fields)
         matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
 
@@ -198,7 +202,7 @@ class App:
         :param search_criteria: Search criteria for users.search method
         :return: List of dictionaries, each describing a VK API `User` object.
         """
-        possible_matches = self.api.users_search(search_criteria)['items']
+        possible_matches = self.api.users_search(**search_criteria)['items']
 
         return possible_matches
 
@@ -242,7 +246,7 @@ class App:
         :param ids: List of matches ids.
         :return: String containing VKScript code.
         """
-        path = os.path.join(g.resources, 'vkscript.txt')
+        path = os.path.join(resources, 'vkscript.txt')
 
         with open(path, encoding='utf8') as f:
             code = f.read()
@@ -282,7 +286,6 @@ class App:
             groups, photos = result[0], result[1]
             matches_groups.extend(groups)
             matches_photos.extend(photos)
-            sleep(0.2)
 
         return matches_groups, matches_photos
 
@@ -312,7 +315,7 @@ class App:
 
 def startup(flags):
     try:
-        os.mkdir(g.data)
+        os.mkdir(data)
     except FileExistsError:
         pass
 
@@ -321,7 +324,6 @@ def startup(flags):
 
     utils.clean_screen()
 
-    owner_token = authorize()
-    api = VKApi(g.API_URL, g.VERSION, owner_token)
+    api = VKApi()
 
-    return App(api, flags, g.dbpath)
+    return App(api, flags, dbpath)
