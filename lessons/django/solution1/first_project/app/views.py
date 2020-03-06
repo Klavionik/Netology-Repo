@@ -19,6 +19,7 @@ def home_view(request):
 
 
 def time_view(request):
+    datetime.now()
     current_time = datetime.strftime(datetime.now(), '%X')
     msg = f'Current server time: {current_time}'
     return HttpResponse(msg)
