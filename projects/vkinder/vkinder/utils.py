@@ -33,13 +33,6 @@ def cleanup(text):
 
 
 def common(iterable1, iterable2):
-    """
-    Takes two iterable objects and returns the number of their common objects.
-
-    :param iterable1: An iterable object
-    :param iterable2: An iterable object
-    :return: int
-    """
     return len(set(iterable1) & set(iterable2))
 
 
@@ -48,8 +41,8 @@ def find_largest_photo(links):
     Given the 'sizes' array of a VK API `Photo` object, returns a
     link to the largest photo in the array.
 
-    :param links: `Sizes` array (a list of dicts)
-    :return: Largest photo url (a string)
+    :param links: `Sizes` array
+    :return: Largest photo url
     """
 
     def size_type_to_int(size):
@@ -89,11 +82,7 @@ def next_ids(ids, amount=12):
 
 def verify_bday(value):
     """
-    Validates if a given date string conforms to the format used for find_age function.
-
-    :param value: Birth date of the current user
-    :return: :class:re.Match object if the given argument is correct,
-    None if not correct or not a string
+    Validates if a given string conforms to the format used for find_age function.
     """
     pattern = re.compile(r'^\d?\d\.\d?\d\.\d{4}$')
 
@@ -102,31 +91,24 @@ def verify_bday(value):
     except TypeError:
         return None
     else:
-        return verification
+        return True if verification else False
 
 
 def progress_bar(text):
-    """
-    Displays a fancy progress bar.
-
-    :param text: Progress bar text
-    :return: :module:`progressbar2` progress bar
-    """
     bar = \
         progressbar.ProgressBar(widgets=[f'{B}{text}{END}',
                                          progressbar.Percentage(),
-                                         progressbar.Bar
-                                             (marker=progressbar.AnimatedMarker(
-                                             fill='#', fill_wrap=(
-                                                 f'{V}',
-                                                 f'{END}'),
-                                             marker_wrap=(
-                                                 f'{V}',
-                                                 f'{END}')))], redirect_stdout=True)
+                                         progressbar.Bar(
+                                             marker=progressbar.AnimatedMarker(
+                                                 fill='#', fill_wrap=(f'{V}', f'{END}'),
+                                                 marker_wrap=(f'{V}', f'{END}'))
+                                         )
+                                         ],
+                                redirect_stdout=True)
     return bar
 
 
-def calculate_sex(user_sex, same_sex):
+def target_sex(user_sex, same_sex):
     if not same_sex:
         if user_sex == 2:
             return 1

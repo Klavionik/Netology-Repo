@@ -1,8 +1,9 @@
-import unittest
-import os
 import json
+import os
+import unittest
+
 import vkinder.utils as utils
-from vkinder.globals import root
+from vkinder import root
 
 fixture_photos = os.path.join(root, 'tests', 'fixtures', 'utils_photos.json')
 
@@ -61,13 +62,13 @@ class UtilsTest(unittest.TestCase):
 
     def test_verify_bday(self):
         correct_bdate = '1.1.2000'
+        correct_bdate2 = '05.08.1995'
         incorrect_bdate = '18.3'
-        incorrect_bdate2 = '05.08.1995'
         wrong_type = 09.12
 
         self.assertTrue(utils.verify_bday(correct_bdate), 'Correct birth date')
+        self.assertTrue(utils.verify_bday(correct_bdate2), 'Correct birth date')
         self.assertFalse(utils.verify_bday(incorrect_bdate), 'Incorrect birth date')
-        self.assertFalse(utils.verify_bday(incorrect_bdate2), 'Incorrect birth date')
         self.assertIsNone(utils.verify_bday(wrong_type), 'Returns None on the wrong type')
 
 
