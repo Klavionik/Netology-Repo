@@ -4,8 +4,8 @@ import os
 root = os.path.dirname(__file__)
 data = os.path.join(os.getcwd(), 'data')
 resources = os.path.join(root, 'resources')
-tokenpath = os.path.join(data, 'token.dat')
-dbpath = os.path.join(data, "vkinder.db")
+tokenpath = os.path.join(resources, 'token.dat')
+dbpath = os.path.join(resources, "vkinder.db")
 
 config = configparser.ConfigParser()
 config.read_file(open(os.path.join(resources, 'config.ini')))
