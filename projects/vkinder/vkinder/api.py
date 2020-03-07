@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import pickle
 import re
 from collections import namedtuple
@@ -11,10 +12,11 @@ import requests
 # noinspection PyPackageRequirements
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
+from oauthlib.oauth2 import MismatchingStateError
 
 from vkinder.exceptions import APIError, \
     InternalServerError, TooManyRequestsPerSecond, UserUnavailable, InvalidUserID
-from . import config, root, tokenpath, Y, END, G
+from . import config, root, tokenpath, Y, END, G, R
 from .utils import clean_screen
 
 CLIENT_ID = config.get('App Settings', 'ClientID',
@@ -86,7 +88,12 @@ class VKApi:
         try:
             token = open_token()
         except FileNotFoundError:
-            token = self._get_token(discard_token)
+            try:
+                token = self._get_token(discard_token)
+            except MismatchingStateError:
+                print(f'{R}Mismatching state: possible CSFR attack '
+                      f'or you just typed in a wrong authentication code{END}')
+                sys.exit()
 
         return token
 
@@ -143,7 +150,7 @@ class VKApi:
     @staticmethod
     def _send_request(url, params):
 
-        response = requests.request('POST', url, data=params, timeout=10)
+        response = requests.request('POST', url, data=params, timeout=20)
 
         if response.status_code == 200:
             json_response = response.json()
@@ -207,7 +214,7 @@ class VKApi:
             login_attempts -= 1
         else:
             print("Invalid login and/or password!")
-            exit()
+            sys.exit()
         if 'authcheck' in browser.geturl():
             browser.select_form(nr=0)
             browser.form['code'] = input('Enter authentication code\n')
@@ -224,7 +231,7 @@ class VKApi:
                                "Proceed? y/n").lower().rstrip()
             if permission != 'y':
                 print('Aborted')
-                exit()
+                sys.exit()
             browser.open(link)
         except AttributeError:
             pass

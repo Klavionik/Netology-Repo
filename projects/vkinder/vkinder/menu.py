@@ -11,6 +11,8 @@ assigns each match a score based on the likeness of
 user's and match's profile, saves matches to the database
 and prints out matches from the database in descending score order.
 """
+import sys
+
 from vkinder import R, G, Y, V, END, B
 
 
@@ -45,7 +47,7 @@ def run(app):
         elif option == 'l':
             list_users(app)
         elif option == 'q':
-            quit()
+            sys.exit()
 
 
 def set_user(app):
