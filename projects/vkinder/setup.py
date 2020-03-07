@@ -18,5 +18,6 @@ setup(
         'requests-oauthlib',
         'SQLAlchemy',
         'progressbar2',
-    ]
+    ],
+    python_requires='>=3.8'
 )
