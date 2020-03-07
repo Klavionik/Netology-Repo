@@ -2,8 +2,8 @@ import os
 import pickle
 from datetime import datetime
 
+import vkinder.utils as utils
 from . import config, Y, END, resources
-from .utils import cleanup, common, verify_bday, flatten, calculate_sex
 
 # VK user object item fields -> :class:`User` attributes mapping
 user_map = {'general': config['General User'],
@@ -25,7 +25,16 @@ AGE_BOUND = config.getint('Match Settings', 'AgeBound')
 
 class User:
 
-    def __init__(self, uid, name, surname, sex, age, city, personal, interests, groups):
+    def __init__(self, uid,
+                 name,
+                 surname,
+                 sex,
+                 age,
+                 city,
+                 personal,
+                 interests,
+                 groups):
+
         self.uid = uid
         self.name = name
         self.surname = surname
@@ -40,8 +49,8 @@ class User:
         return f'User {self.name} {self.surname}'
 
     @classmethod
-    def from_api(cls, info, groups):
-        general, personal, interests = cls.parse(info)
+    def from_api(cls, profile, groups):
+        general, personal, interests = cls.parse(profile)
         return cls(general['uid'],
                    general['name'],
                    general['surname'],
@@ -64,38 +73,38 @@ class User:
                    db_user.city, personal, interests, groups)
 
     @classmethod
-    def parse(cls, info):
+    def parse(cls, profile):
         """
         Takes a VK API `User` object in the form of a dictionary and prepares its contents
         in order to create a :class:`User` object.
 
-        :param info: Dictionary describing a VK API `User` object
+        :param profile: Dictionary describing a VK API `User` object
         :return: Parsed user profile info
         """
-        flat_info = flatten(info)
+        flat_profile = utils.flatten(profile)
         bad_value = ''
 
-        parsed_general = {}
-        parsed_personal = {}
-        parsed_interests = {}
+        general = {}
+        personal = {}
+        interests = {}
 
         for category, mapping in user_map.items():
             for vk_field, cls_attr in mapping.items():
-                value = flat_info.get(vk_field, '')
+                value = flat_profile.get(vk_field, '')
                 if vk_field == 'bdate':
                     value = cls.find_age(value)
                 elif not value or value == bad_value:
                     value = cls.ask_user(cls_attr)
 
                 if category == 'personal':
-                    parsed_personal[cls_attr] = value
+                    personal[cls_attr] = value
                 elif category == 'interests':
-                    clean_attr = cleanup(value)
-                    parsed_interests[cls_attr] = clean_attr
+                    clean_attr = utils.cleanup(value)
+                    interests[cls_attr] = clean_attr
                 else:
-                    parsed_general[cls_attr] = value
+                    general[cls_attr] = value
 
-        return parsed_general, parsed_personal, parsed_interests
+        return general, personal, interests
 
     @classmethod
     def ask_user(cls, attribute):
@@ -121,10 +130,10 @@ class User:
         """
         Takes the current user's birth date and returns their age.
 
-        :param bday: Birth date formatted as d.m.yyyy
+        :param bday: Birth date
         :return: Exact user age
         """
-        if not verify_bday(bday):
+        if not utils.verify_bday(bday):
             bday = input('\nBirth date is incomplete or incorrect.\n'
                          'Please, enter your birth date as dd.mm.yyyy.\n\n')
 
@@ -140,7 +149,7 @@ class User:
     def search_criteria(self, ignore_city, ignore_age, same_sex):
         age_bound = AGE_BOUND if not ignore_age else 100
         criteria = {'city': 0 if ignore_city else self.city,
-                    'sex': calculate_sex(self.sex, same_sex),
+                    'sex': utils.target_sex(self.sex, same_sex),
                     'age_from': self.age - age_bound if (self.age - age_bound) >= 18 else 18,
                     'age_to': self.age + age_bound,
                     'has_photo': 1,
@@ -157,17 +166,25 @@ class User:
 
 class Match:
 
-    def __init__(self, general, personal, interests, groups, photos):
-        self.uid = general['uid']
-        self.name = general['name']
-        self.surname = general['surname']
-        self.common_friends = general['common_friends']
+    def __init__(self, uid,
+                 name,
+                 surname,
+                 common_friends,
+                 interests,
+                 personal,
+                 groups,
+                 photos):
+
+        self.uid = uid
+        self.name = name
+        self.surname = surname
+        self.common_friends = common_friends
         self.interests = interests
         self.personal = personal
         self.groups = groups
         self.photos = photos
 
-        self.score = 400  # base score
+        self.score = 0
         self.interests_score = 0
         self.personal_score = 0
         self.friends_score = 0
@@ -177,9 +194,13 @@ class Match:
         return f'Match {self.name} {self.surname}'
 
     @classmethod
-    def from_api(cls, info, groups, photos):
-        general, personal, interests = cls.parse(info)
-        return cls(general, personal, interests, groups, photos)
+    def from_api(cls, profile, groups, photos):
+        general, personal, interests = cls.parse(profile)
+        return cls(general['uid'],
+                   general['name'],
+                   general['surname'],
+                   general['common_friends'],
+                   personal, interests, groups, photos)
 
     @classmethod
     def parse(cls, info):
@@ -190,11 +211,11 @@ class Match:
         :param info: Dictionary describing a VK API `User` object
         :return: Parsed user profile info
         """
-        flat_response = flatten(info)
+        flat_response = utils.flatten(info)
 
-        parsed_info = {}
-        parsed_personal = {}
-        parsed_interests = {}
+        general = {}
+        personal = {}
+        interests = {}
 
         for category, mapping in match_map.items():
             for vk_field, cls_attr in mapping.items():
@@ -203,14 +224,14 @@ class Match:
                     value = 0
 
                 if category == 'personal':
-                    parsed_personal[cls_attr] = value
+                    personal[cls_attr] = value
                 elif category == 'interests':
-                    clean_value = cleanup(value)
-                    parsed_interests[cls_attr] = clean_value
+                    clean_value = utils.cleanup(value)
+                    interests[cls_attr] = clean_value
                 else:
-                    parsed_info[cls_attr] = value
+                    general[cls_attr] = value
 
-        return parsed_info, parsed_personal, parsed_interests
+        return general, personal, interests
 
     @property
     def total_score(self):
@@ -235,7 +256,7 @@ class Match:
             user_value = model.interests[field]
             match_value = self.interests.get(field, None)
             if match_value:
-                field_score = INTERESTS_FACTOR * common(match_value, user_value)
+                field_score = INTERESTS_FACTOR * utils.common(match_value, user_value)
                 interests_score += field_score
         return interests_score
 
@@ -259,6 +280,6 @@ class Match:
     def _score_groups(self, model):
         groups_score = 0
 
-        groups_score += GROUPS_FACTOR * common(self.groups, model.groups)
+        groups_score += GROUPS_FACTOR * utils.common(self.groups, model.groups)
 
         return groups_score

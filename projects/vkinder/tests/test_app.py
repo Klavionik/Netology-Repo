@@ -1,12 +1,14 @@
+# FIXME: The test is obsolete
 import json
 import os
 import unittest
 from unittest.mock import patch, MagicMock
 
-from vkinder import app as vkinder
 from vkinder.globals import root, data
-from vkinder.types import User
+
+from vkinder import app as vkinder
 from vkinder.db import db_session, Base
+from vkinder.types import User
 
 output_amount = 10
 fixtures_path = os.path.join(root, 'tests', 'fixtures')

@@ -11,7 +11,7 @@ assigns each match a score based on the likeness of
 user's and match's profile, saves matches to the database
 and prints out matches from the database in descending score order.
 """
-from vkinder.globals import R, G, Y, V, END, B
+from vkinder import R, G, Y, V, END, B
 
 
 def run(app):
@@ -50,15 +50,15 @@ def run(app):
 
 def set_user(app):
     target = input(f"{Y}Let's find somebody's fortune! "
-                   "But first, enter their ID or screenname below.\n"
-                   "We'll need to acquire some information about the lucky guy "
-                   f"or girl.{END}\n")
+                   "Enter their ID or screenname below.\n"
+                   f"We'll need to acquire some information.{END}\n")
     if not target:
         return
-    new_user = app.new_user(target)
-    if not new_user:
-        print(f"{Y}Can't found them.\nMaybe you've made a typo, "
-              f"this profile is private, deleted or banned.{END}")
+    new_user = app.set_user(target)
+    if new_user is False:
+        print(f"{Y}This profile is private, deleted or banned.{END}")
+    elif new_user is None:
+        print(f"{Y}Can't find user with this name.{END}")
     else:
         print(f'{G}{new_user} set as the current user.{END}')
 

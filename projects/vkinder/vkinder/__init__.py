@@ -1,14 +1,14 @@
 import configparser
 import os
 
-root = os.path.dirname(os.path.dirname(__file__))
-data = os.path.join(root, 'data')
+root = os.path.dirname(__file__)
+data = os.path.join(os.getcwd(), 'data')
 resources = os.path.join(root, 'resources')
 tokenpath = os.path.join(data, 'token.dat')
 dbpath = os.path.join(data, "vkinder.db")
 
 config = configparser.ConfigParser()
-config.read_file(open(os.path.join(root, 'config.ini')))
+config.read_file(open(os.path.join(resources, 'config.ini')))
 
 # Console coloring
 G = '\033[38;5;40m'  # green

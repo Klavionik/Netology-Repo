@@ -4,68 +4,69 @@ import sys
 from time import sleep
 
 import vkinder.utils as utils
+from . import config
 from . import resources, data, G, END, dbpath
-from .api import VKApi
+from .api import VKApi, check_profile
 from .db import AppDB, db_session
-from .exceptions import APIError
+from .exceptions import UserUnavailable, InvalidUserID
 from .types import User, Match
+
+API_URL = config.get('VK API', 'APIUrl')
+VERSION = config.get('VK API', 'Version')
 
 
 class App:
 
-    def __init__(self, api, flags, db):
-        """
-        Initializes an instance of the VKInder app.
-
-        :param api: VK API handler
-        """
+    def __init__(self, api, export, output_amount, ignore_city, ignore_age, same_sex, db):
         self.api = api
         self.db = AppDB(db)
-        self.export = flags['export']
-        self.output_amount = flags['output_amount']
-
-        self.flags = flags
+        self.export = export
+        self.output_amount = output_amount
+        self.ignore_city = ignore_city
+        self.ignore_age = ignore_age
+        self.same_sex = same_sex
 
         self.current_user = None
 
-    def new_user(self, target):
-        """
-        Collects all required data from the VK API and user input and creates a User object
-        (representing the current user, i.e. a person looking for a match).
-
-        :param target: Target user id or screen name
-        :return: String representation of :class:`User` object.
-        """
+    def set_user(self, id_or_screenname):
         try:
-            target_id, target_info = self._fetch_user(target)
-        except APIError as e:
-            if e.code == (30, 113, 18):
-                return False
-        else:
-            with db_session(self.db.factory) as session:
-                user_in_db = self.db.get_user(target_id, session)
+            user_response = self._fetch_user(id_or_screenname)
+        except UserUnavailable:
+            return False
+        except InvalidUserID:
+            return None
 
-                if user_in_db:
-                    user = User.from_database(user_in_db)
-                    self.current_user = user
-                    print(f'\n{G}{user} loaded from the database.{END}')
-                else:
+        user_id = user_response[0]['id']
+        user_profile = user_response[0]
 
-                    if not target_info.get('city', None):
-                        city = input("Looks like we don't know, where you live.\n"
-                                     "What's your city of residence?\n")
-                        city_id = self.api.get_cities(country_id=1,
-                                                      city=city,
-                                                      count=1)['items'][0]['id']
-                        target_info['city.id'] = city_id
+        with db_session(self.db.factory) as session:
+            user_in_db = self.db.get_user(user_id, session)
 
-                    target_groups = self._fetch_user_groups(target_id)
-                    user = User.from_api(target_info, target_groups)
-                    self.current_user = user
-                    self.db.add_user(user, session)
-                    print(f'\n{G}{user} loaded from the API{END}')
+            if user_in_db:
+                user = User.from_database(user_in_db)
+                self.current_user = user
+                print(f'\n{G}{user} loaded from the database.{END}')
+            else:
+                user = self.new_user(user_id, user_profile, session)
+                self.current_user = user
+                print(f'\n{G}{user} loaded from the API{END}')
 
-            return str(self.current_user)
+        return str(self.current_user)
+
+    def new_user(self, user_uid, user_profile, session):
+        if not user_profile.get('city', None):
+            city = input("\nLooks like we don't know, where you live.\n"
+                         "What's your city of residence?\n\n")
+            city_id = self.api.other.getcities(country_id=1,
+                                               city=city,
+                                               count=1)['items'][0]['id']
+            user_profile['city.id'] = city_id
+
+        user_groups = self._fetch_user_groups(user_uid)
+        user = User.from_api(user_profile, user_groups)
+        self.db.add_user(user, session)
+
+        return user
 
     def delete_user(self, user_uid):
         if self.current_user and (self.current_user.uid == int(user_uid)):
@@ -78,45 +79,31 @@ class App:
             return False
 
     def spawn_matches(self):
-        """
-        Creates a stream of :class:`Match` objects using the information acquired
-        from the VK API and processed by the application. Adds every match to the database.
-
-        :return: Number of found matches
-        """
-
-        if self.current_user:
-
-            matches_info, matches_groups, matches_photos = self._prepare_matches()
-
-            bar = utils.progress_bar("Building matches: ")
-
-            for match_info, match_groups, match_photos in \
-                    bar(zip(matches_info, matches_groups, matches_photos),
-                        max_value=len(matches_info)):
-                top3_photos = self._get_top3_photos(match_photos)
-                match_object = Match.from_api(match_info, match_groups, top3_photos)
-                match_object.scoring(self.current_user)
-
-                with db_session(self.db.factory) as session:
-                    if match := self.db.get_match(match_object.uid,
-                                                  self.current_user.uid,
-                                                  session):
-                        self.db.update_match(match, match_object, session)
-                    else:
-                        self.db.add_match(match_object, self.current_user.uid, session)
-
-            return len(matches_info)
-
-        else:
+        if not self.current_user:
             return False
 
-    def list_users(self):
-        """
-        Returns list of all users saved in the database.
+        profiles, groups, photos = self._prepare_matches()
 
-        :return: Saved users list or False if no users found.
-        """
+        bar = utils.progress_bar("Building matches: ")
+
+        for match_info, match_groups, match_photos in \
+                bar(zip(profiles, groups, photos),
+                    max_value=len(profiles)):
+            top3_photos = self._get_top3_photos(match_photos)
+            match_object = Match.from_api(match_info, match_groups, top3_photos)
+            match_object.scoring(self.current_user)
+
+            with db_session(self.db.factory) as session:
+                if match_in_db := self.db.get_match(match_object.uid,
+                                                    self.current_user.uid,
+                                                    session):
+                    self.db.update_match(match_in_db, match_object, session)
+                else:
+                    self.db.add_match(match_object, self.current_user.uid, session)
+
+        return len(profiles)
+
+    def list_users(self):
         with db_session(self.db.factory) as session:
             all_users = self.db.get_all_users(session)
             if all_users:
@@ -125,15 +112,9 @@ class App:
                 return False
 
     def next_matches(self, user_id):
-        """
-        Exports next `amount` of matches for the user with the `user_id`
-        to a JSON file.
-
-        :param user_id: VK user id.
-        :return: Number of exported matches or False if no user found.
-        """
         with db_session(self.db.factory) as session:
             user = self.db.get_user(user_id, session)
+
             if user:
                 next_matches = self.db.pop_match(user_id, self.output_amount, session)
             else:
@@ -143,71 +124,52 @@ class App:
             path = os.path.join(data, f'{user_id}_matches.json')
             with open(path, 'w', encoding='utf8') as f:
                 json.dump(next_matches, f, indent=2, ensure_ascii=False)
-
                 return len(next_matches)
-        return next_matches
+        else:
+            return next_matches
 
+    @check_profile
     def _fetch_user(self, identificator):
         fields = ','.join(['bdate', 'city', 'sex',
                            'games', 'music', 'movies', 'interests',
                            'tv', 'books', 'personal'])
-        api_response = self.api.users_get(user_ids=identificator,
+        api_response = self.api.users.get(user_ids=identificator,
                                           fields=fields)
-        user_info = api_response[0]
-        user_id = user_info['id']
 
-        if user_info.get('is_closed'):
-            raise APIError({'error': {'error_code': 30}})
-
-        if user_info.get('deactivated'):
-            raise APIError({'error': {'error_code': 18}})
-
-        return user_id, user_info
+        return api_response
 
     def _fetch_user_groups(self, user_id):
 
-        user_groups = self.api.groups_get(user_id=user_id)
+        user_groups = self.api.groups.get(user_id=user_id)
         return user_groups['items']
 
     def _prepare_matches(self):
-        """
-        Coordinates acquiring and processing matches profiles in order to spawn
-        :class:`Match` objects.
+        search_criteria = self.current_user.search_criteria(self.ignore_city,
+                                                            self.ignore_age,
+                                                            self.same_sex)
+        profiles, groups, photos = self._find_matches(search_criteria)
 
-        :return: Prepared matches info
-        """
+        return profiles, groups, photos
 
-        match_search_criteria = self.current_user.search_criteria(self.flags['ignore_city'],
-                                                                  self.flags['ignore_age'],
-                                                                  self.flags['same_sex'])
-        possible_matches = self._get_possible_matches(match_search_criteria)
+    def _find_matches(self, search_criteria):
+        rough_matches = self.api.users.search(**search_criteria)['items']
+        fine_matches = self._sifter(rough_matches)
 
-        matches_ids = self._get_matches_ids(possible_matches)
+        fields = ','.join([
+            'bdate', 'city', 'sex', 'common_count'
+                                    'games', 'music', 'movies', 'interests',
+            'tv', 'books', 'personal'
+        ])
 
-        fields = ','.join(['bdate', 'city', 'sex', 'common_count'
-                                                   'games', 'music', 'movies', 'interests',
-                           'tv', 'books', 'personal'])
-        matches_general = self.api.users_get(
-            user_ids=str(matches_ids).strip('[]'),
+        profiles = self.api.users.get(
+            user_ids=','.join(fine_matches),
             fields=fields)
-        matches_groups, matches_photos = self._get_matches_groups_photos(matches_ids)
+        groups, photos = self._get_groups_photos(fine_matches)
 
-        return matches_general, matches_groups, matches_photos
-
-    def _get_possible_matches(self, search_criteria):
-        """
-        Acquires VK user profiles matching the current user profile based on
-        the given criteria.
-
-        :param search_criteria: Search criteria for users.search method
-        :return: List of dictionaries, each describing a VK API `User` object.
-        """
-        possible_matches = self.api.users_search(**search_criteria)['items']
-
-        return possible_matches
+        return profiles, groups, photos
 
     @staticmethod
-    def _get_matches_ids(matches_items):
+    def _sifter(rough_matches):
         """
         Loops through the list of possible matches and filters out unneeded ones.
 
@@ -220,32 +182,25 @@ class App:
         If all these conditions are met, then the function adds a match id to
         to the final list of matches.
 
-        :param matches_items: List of VK `User` objects.
+        :param rough_matches: List of VK `User` objects.
         :return: List of matches ids.
         """
         bar = utils.progress_bar('Sorting out data: ')
 
-        matches_ids = []
+        sifted = []
 
-        for match in bar(matches_items, max_value=len(matches_items)):
+        for match in bar(rough_matches, max_value=len(rough_matches)):
             if (not match['blacklisted']) and \
                     (not match['blacklisted_by_me']) and \
                     (match.get('relation', 0) not in (2, 3, 4, 7, 8)) and \
                     not match['is_closed']:
-                matches_ids.append(match['id'])
+                sifted.append(str(match['id']))
                 sleep(0.010)
 
-        return matches_ids
+        return sifted
 
     @staticmethod
     def _prepare_code(ids):
-        """
-        Reads a VKScript code from a text file, replaces `ids` and `count`
-        variables in that code and returns the result.
-
-        :param ids: List of matches ids.
-        :return: String containing VKScript code.
-        """
         path = os.path.join(resources, 'vkscript.txt')
 
         with open(path, encoding='utf8') as f:
@@ -253,7 +208,7 @@ class App:
 
         return code % (ids, len(ids))
 
-    def _get_matches_groups_photos(self, matches_ids):
+    def _get_groups_photos(self, matches_ids):
         """
         Loops through the list of matches ids and gets groups
         and photos info for every id.
@@ -266,11 +221,6 @@ class App:
         and allows that code to make up to 25 requests per one
         `execute` method execution.
 
-        Here we split the list in chucks of 12 ids (as we make 2 requests
-        for one `execute` code) and process each chuck separately
-        and then concatenate all results in the variables
-        `matches_groups` and `matches_photos`.
-
         :param matches_ids: List of matches ids.
         :return: Tuple of dicts (matches groups, matches photos).
         """
@@ -282,7 +232,7 @@ class App:
         for ids_chunk in bar(utils.next_ids(matches_ids),
                              max_value=len(matches_ids) / 12):
             code = self._prepare_code(ids_chunk)
-            result = self.api.execute(code=code)
+            result = self.api.other.execute(code=code)
             groups, photos = result[0], result[1]
             matches_groups.extend(groups)
             matches_photos.extend(photos)
@@ -290,19 +240,14 @@ class App:
         return matches_groups, matches_photos
 
     @staticmethod
-    def _get_top3_photos(photos):
-        """
-        Takes a list of dicts, each describing a photo of a possible match
-        and returns a list of the top-3 most popular photos (based on the amount of likes).
-
-        :param photos: list of all photos for a match.
-        :return: list of top-3 photos for a match.
-        """
+    def _get_top3_photos(profile_photos):
         photos_processed = [{'likes': photo['likes']['count'],
                              'link': utils.find_largest_photo(photo['sizes'])}
-                            for photo in photos]
+                            for photo in profile_photos]
 
-        return sorted(photos_processed, key=lambda photo: photo['likes'], reverse=True)[:3]
+        return sorted(photos_processed,
+                      key=lambda photo: photo['likes'],
+                      reverse=True)[:3]
 
     @staticmethod
     def _make_list(db_users_list):
@@ -314,6 +259,13 @@ class App:
 
 
 def startup(flags):
+    export = flags['export']
+    output_amount = flags['output_amount']
+    ignore_city = flags.get('ignore_city', False)
+    ignore_age = flags.get('ignore_age', False)
+    same_sex = flags['same_sex']
+    debug = flags['debug']
+
     try:
         os.mkdir(data)
     except FileExistsError:
@@ -324,6 +276,7 @@ def startup(flags):
 
     utils.clean_screen()
 
-    api = VKApi()
+    api = VKApi(API_URL, VERSION, debug)
 
-    return App(api, flags, dbpath)
+    return App(api, export, output_amount,
+               ignore_city, ignore_age, same_sex, dbpath)

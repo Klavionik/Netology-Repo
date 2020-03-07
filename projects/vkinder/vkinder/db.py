@@ -88,13 +88,6 @@ class AppDB:
 
     @staticmethod
     def add_user(user_object, session):
-        """
-        Adds new user to the database if it doesn't exist in the table 'users',
-        otherwise updates the record.
-
-        :param user_object: :class:`User` object
-        :param session: SQLAlchemy session
-        """
         new_user = User(uid=user_object.uid,
                         name=user_object.name,
                         surname=user_object.surname,
@@ -109,14 +102,6 @@ class AppDB:
 
     @staticmethod
     def add_match(match_object, user_uid, session):
-        """
-        Adds new match to the database if it doesn't exist in the table 'matches',
-        otherwise updates the record.
-
-        :param match_object: :Class:`Match` object
-        :param user_uid: User uid, whom the match belongs
-        :param session: SQLAlchemy session
-        """
         new_match = Match(uid=match_object.uid,
                           user_uid=user_uid,
                           name=match_object.name,
@@ -155,13 +140,6 @@ class AppDB:
 
     @staticmethod
     def get_user(user_uid, session):
-        """
-        Returns a User with the given id, if it exists in the table `users`.
-
-        :param user_uid: User id
-        :param session: SQLAlchemy session
-        :return: SQLAlchemy User object
-        """
         user = session.query(User).filter(User.uid == user_uid).first()
 
         if user:
@@ -169,13 +147,6 @@ class AppDB:
 
     @staticmethod
     def get_match(match_uid, user_uid, session):
-        """
-        Returns a Match instance with the given id, if it exists in the table `matches`.
-
-        :param match_uid: Match user id
-        :param session: SQLAlchemy session
-        :return: SQLAlchemy Match object
-        """
         query = session.query(Match)
         filtered = query.filter(Match.uid == match_uid, Match.user_uid == user_uid)
         match = filtered.first()
@@ -185,15 +156,6 @@ class AppDB:
 
     @staticmethod
     def pop_match(user_uid, count, session):
-        """
-        Returns name, surname, profile, total score and photos
-        of the next unseen match with the largest total score.
-
-        :param user_uid: :class:`User` id of the match
-        :param count: Number of matches to return
-        :param session: SQLAlchemy session
-        :return: Dict of dicts containing match info
-        """
         matches = {}
 
         match_query = session.query(Match)
@@ -215,12 +177,6 @@ class AppDB:
 
     @staticmethod
     def get_all_users(session):
-        """
-        Returns a list of all User instances from the database.
-
-        :param session: SQLAlchemy session
-        :return: List of User instances
-        """
         users = session.query(User).all()
 
         if users:

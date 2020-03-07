@@ -12,28 +12,23 @@ import requests
 from oauthlib.oauth2 import MobileApplicationClient
 from requests_oauthlib import OAuth2Session
 
-from vkinder.exceptions import APIError, InternalServerError, TooManyRequestsPerSecond
+from vkinder.exceptions import APIError, \
+    InternalServerError, TooManyRequestsPerSecond, UserUnavailable, InvalidUserID
 from . import config, root, tokenpath, Y, END, G
 from .utils import clean_screen
 
 CLIENT_ID = config.get('App Settings', 'ClientID',
                        fallback=os.environ.get('CLIENT_ID'))
-API_URL = config.get('VK API', 'APIUrl')
 AUTHORIZE_URL = config.get('VK API', 'AuthorizeUrl')
 REDIRECT_URI = config.get('VK API', 'RedirectUrl')
-VERSION = config.get('VK API', 'Version')
 
 UsersMethods = namedtuple('Users', 'get search')
 GroupsMethods = namedtuple('Groups', 'get')
-OtherMethods = namedtuple('Others', 'getcities execute getshortlink')
+OtherMethods = namedtuple('Others', 'getcities execute')
 
 logger = logging.getLogger(__name__)
-
 logger.setLevel(logging.DEBUG)
-fileh = logging.FileHandler(os.path.join(root, 'api.log'))
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
-fileh.setFormatter(formatter)
-logger.addHandler(fileh)
 
 
 def open_token():
@@ -48,17 +43,33 @@ def save_token(token):
         pickle.dump(token, f)
 
 
+def check_profile(usergetmethod):
+    def wrapper(*args, **kwargs):
+        response = usergetmethod(*args, **kwargs)
+
+        if response[0].get('is_closed') or response[0].get('deactivated'):
+            raise UserUnavailable("User is not available")
+
+        return response
+
+    return wrapper
+
+
 class VKApi:
 
-    def __init__(self, api_url=API_URL, api_version=VERSION):
+    def __init__(self, api_url, api_version, debug):
         self.url = api_url
         self.v = api_version
         self.token = self.authorize()
         self.auth = {'v': self.v, 'access_token': self.token}
-        self.users = UsersMethods(get='/users.get', search='/users.search')
-        self.groups = GroupsMethods(get='/groups.get')
-        self.others = OtherMethods(getcities='/database.getCities', execute='/execute',
-                                   getshortlink='/utils.getShortLink')
+        self.users = UsersMethods(get=self._users_get, search=self._users_search)
+        self.groups = GroupsMethods(get=self._groups_get)
+        self.other = OtherMethods(getcities=self._get_cities, execute=self._execute)
+
+        if debug:
+            fileh = logging.FileHandler(os.path.join(root, 'api.log'))
+            fileh.setFormatter(formatter)
+            logger.addHandler(fileh)
 
         self._test_request()
 
@@ -79,27 +90,27 @@ class VKApi:
 
         return token
 
-    def users_search(self, **kwargs):
-        return self._get_response(self.url + self.users.search,
+    def _users_get(self, **kwargs):
+        return self._get_response('/users.get',
                                   request_params=kwargs)
 
-    def execute(self, **kwargs):
-        return self._get_response(self.url + self.others.execute,
+    def _users_search(self, **kwargs):
+        return self._get_response('/users.search',
                                   request_params=kwargs)
 
-    def groups_get(self, **kwargs):
-        return self._get_response(self.url + self.groups.get,
+    def _execute(self, **kwargs):
+        return self._get_response('/execute',
                                   request_params=kwargs)
 
-    def users_get(self, **kwargs):
-        return self._get_response(self.url + self.users.get,
+    def _groups_get(self, **kwargs):
+        return self._get_response('/groups.get',
                                   request_params=kwargs)
 
-    def get_cities(self, **kwargs):
-        return self._get_response(self.url + self.others.getcities,
+    def _get_cities(self, **kwargs):
+        return self._get_response('/database.getCities',
                                   request_params=kwargs)
 
-    def _get_response(self, url, request_params):
+    def _get_response(self, method, request_params):
 
         params = {**self.auth, **request_params}
 
@@ -109,8 +120,8 @@ class VKApi:
 
         while not success:
             try:
-                logger.debug(f'Request started: method {url}\nParameters {request_params}')
-                response = self._send_request(url, params)
+                logger.debug(f'Request started: method {method}\nParameters {request_params}')
+                response = self._send_request(self.url + method, params)
             except TooManyRequestsPerSecond:
                 logger.debug('Handling TooManyRequestsPerSecond exception')
                 sleep(0.3)
@@ -123,10 +134,8 @@ class VKApi:
                     continue
                 else:
                     raise
-            except APIError:
-                return False
             else:
-                logger.debug(f'Response acquired')
+                logger.debug(f'Response acquired\n')
                 success = True
 
         return response
@@ -143,11 +152,14 @@ class VKApi:
                 if error['error_code'] == 6:
                     raise TooManyRequestsPerSecond('VK API allows only 3 requests/sec',
                                                    error=error)
-                if error['error_code'] == 10:
+                elif error['error_code'] == 10:
                     raise InternalServerError('VK API internal server error',
                                               error=error)
+                elif error['error_code'] == 113:
+                    raise InvalidUserID("User doesn't exist", error=error)
                 else:
-                    raise APIError('VK API general error', error=error)
+                    logger.debug(f'VK API Error: {error}')
+                    raise APIError('VK API error', error=error)
 
             return json_response['response']
         else:
@@ -221,7 +233,7 @@ class VKApi:
         return tokenurl
 
     def _test_request(self):
-        response = self.users_get()
+        response = self.users.get()
         owner_name = response[0]['first_name']
         owner_surname = response[0]['last_name']
         clean_screen()
