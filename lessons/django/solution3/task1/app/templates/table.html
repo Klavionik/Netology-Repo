@@ -18,10 +18,10 @@
             {% for element in row %}
                 {% if forloop.last %}
                     <td class="grey darken-1">{{ element }}</td>
-                {% elif not forloop.first %}
-                    <td class="{{ element|color_class }}">{{ element|default:"—" }}</td>
-                {% else %}
+                {% elif forloop.first %}
                     <td>{{ element }}</td>
+                {% else %}
+                    <td class="{{ element|color_class }}">{{ element|default:"—" }}</td>
                 {% endif %}
             {% endfor %}
         </tr>
