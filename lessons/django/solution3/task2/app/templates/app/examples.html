@@ -1,0 +1,17 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block menu %}
+    <li class="active"><a href="{% url 'examples' %}">Примеры</a></li>
+    <li><a href="{% url 'contacts' %}">Контакты</a></li>
+    <li><a href="{% url 'about' %}">О проекте</a></li>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col s12">
+        <h1 class="col s12">Каталог компьютеров Apple</h1>
+        {% include 'app/catalog.html' %}
+    </div>
+</div>
+{% endblock %}
