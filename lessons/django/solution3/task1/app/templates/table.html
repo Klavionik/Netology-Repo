@@ -1,0 +1,30 @@
+{% load string_filters %}
+
+<table class="centered">
+    <thead>
+    <tr>
+        {% for column in head %}
+            {% if forloop.last %}
+                <th class="grey darken-1">{{ column }}</th>
+            {% else %}
+                <th>{{ column }}</th>
+            {% endif %}
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in content %}
+        <tr>
+            {% for element in row %}
+                {% if forloop.last %}
+                    <td class="grey darken-1">{{ element }}</td>
+                {% elif not forloop.first %}
+                    <td class="{{ element|color_class }}">{{ element|default:"—" }}</td>
+                {% else %}
+                    <td>{{ element }}</td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
