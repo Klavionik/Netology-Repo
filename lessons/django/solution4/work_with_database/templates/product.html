@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Телефон{% endblock %}
 {% block content %}
@@ -12,9 +13,9 @@
                 <div class="card" style="margin-bottom: 20px">
                     <div class="card-body">
                         <h1>{{ phone.name }}</h1>
-                        <p class="price">Стоимость: {{ phone.price }} руб.</p>
+                        <p class="price">Стоимость: {{ phone.price|intcomma }} руб.</p>
                         <img src="{{ phone.image }}" style="height: 500px" alt="{{ phone.name }}">
-                        <p class="font-weight-bold">Поддерживает LTE: {{ phone.lte }}</p>
+                        <p class="font-weight-bold">Поддерживает LTE: {{ phone.lte|yesno:"Да,Нет" }}</p>
                         <p class="font-weight-bold">Дата выпуска модели: {{ phone.release_date|date:'j E Y'}}</p>
                     </div>
                 </div>

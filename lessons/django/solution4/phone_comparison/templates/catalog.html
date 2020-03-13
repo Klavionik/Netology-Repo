@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Каталог{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="header">
+            <h1>Сравнение телефонов</h1>
+        </div>
+        <div>
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">Модель</th>
+                    {% for phone in phones %}
+                        <th>{{ phone.name }}</th>
+                    {% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <th>Стоимость, руб.</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.price|intcomma }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>ОС</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.os }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Процессор</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.processor }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Память, ГБ</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.ram }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Диагональ экрана, "</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.display_size }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Разрешение камеры, Мпикс</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.camera_res }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Функция быстрой зарядки</th>
+                    {% for phone in phones %}
+                        <td>{{ phone.fast_charge|yesno:"Да,Нет" }}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Дополнительно</th>
+                    {% for phone in phones %}
+                        {% if phone.samsung %}
+                            <td>{{ phone.samsung.hall_sensor|yesno:"Датчик Холла," }}</td>
+                        {% elif phone.apple %}
+                            <td>
+                                {{ phone.apple.wireless_charge|yesno:"Беспроводная зарядка,"}},
+                                {{ phone.apple.five_g|yesno:"5G," }}</td>
+                        {% elif phone.honor %}
+                            <td>{{ phone.honor.radio|yesno:"FM-радио," }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

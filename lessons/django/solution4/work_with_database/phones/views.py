@@ -22,14 +22,7 @@ def show_catalog(request):
         sort_param = 'name'
 
     catalog = Phone.objects.order_by(ordering(sort_param))
-    context = {'phones': []}
-    for phone in catalog:
-        context['phones'].append(
-            {'name': phone.name,
-             'price': phone.price,
-             'image': phone.image,
-             "slug": phone.slug
-             })
+    context = {'phones': catalog}
 
     return render(request, template, context)
 
@@ -38,11 +31,5 @@ def show_product(request, slug):
     template = 'product.html'
 
     phone = Phone.objects.get(slug=slug)
-    context = {'phone': {
-        'name': phone.name,
-        'price': phone.price,
-        'image': phone.image,
-        'release_date': phone.release_date,
-        'lte': 'Да' if phone.lte_exists else 'Нет'
-    }}
+    context = {'phone': phone}
     return render(request, template, context)
