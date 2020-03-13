@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Phone(models.Model):
-    id = models.IntegerField(primary_key=True)
+
     name = models.CharField(max_length=64)
     image = models.TextField()
     price = models.IntegerField()

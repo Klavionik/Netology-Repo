@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Каталог{% endblock %}
 {% block content %}
@@ -22,7 +23,7 @@
                         <div class="card" style="margin-bottom: 20px">
                             <div class="card-body">
                                 <h3><a href="{% url "show_product" phone.slug %}">{{ phone.name }}</a></h3>
-                                <p class="price">Стоимость: {{ phone.price }} руб.</p>
+                                <p class="price">Стоимость: {{ phone.price|intcomma }} руб.</p>
                                 <img src="{{ phone.image }}" style="height: 300px" alt="{{ phone.name }}">
                             </div>
                         </div>
