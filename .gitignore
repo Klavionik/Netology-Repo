@@ -1,5 +1,5 @@
 /.idea
-/__pycache__
 *.pyc
 pylama.ini
-data/
+settings_local.py
+db.sqlite3
