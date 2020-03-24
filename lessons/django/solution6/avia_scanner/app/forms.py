@@ -1,4 +1,5 @@
 from django import forms
+from django.urls import reverse_lazy
 
 from .models import City
 from .widgets import AjaxInputWidget
@@ -7,7 +8,7 @@ from .widgets import DateWidget
 
 class SearchTicket(forms.Form):
     departure = forms.CharField(
-        widget=AjaxInputWidget(url='http://localhost:8000/api/city_ajax/'),
+        widget=AjaxInputWidget(url=reverse_lazy('cities')),
         label='Город отправления')
 
     arrival = forms.ModelChoiceField(
