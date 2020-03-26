@@ -3,3 +3,4 @@
 pylama.ini
 settings_local.py
 db.sqlite3
+data/
