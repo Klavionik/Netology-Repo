@@ -9,7 +9,7 @@ class ArticleScopesInlineFormset(BaseInlineFormSet):
     def clean(self):
         main = 0
         for form in self.forms:
-            if form.cleaned_data.get('main'):
+            if form.cleaned_data.get('is_main'):
                 main += 1
         if main > 1:
             raise ValidationError("Только один раздел может быть основным!")
