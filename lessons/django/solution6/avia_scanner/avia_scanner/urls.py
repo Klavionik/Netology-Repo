@@ -20,6 +20,6 @@ from app.views import ticket_page_view, cities_lookup
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/city_ajax/', cities_lookup),
+    path('api/city_ajax/', cities_lookup, name='cities'),
     path('', ticket_page_view, name='tickets'),
 ]
