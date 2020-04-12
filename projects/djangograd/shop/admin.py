@@ -7,6 +7,10 @@ from shop.forms import ArticleForm
 class OrderProducts(admin.TabularInline):
     model = models.OrderProducts
 
+    def get_field_queryset(self, db, db_field, request):
+        if db_field.name == 'product':
+            return models.Product.objects.select_related('subcategory')
+
 
 class Articles(admin.TabularInline):
     model = models.Article.products.through

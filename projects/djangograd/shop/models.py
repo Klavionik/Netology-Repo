@@ -70,6 +70,7 @@ class OrderProducts(models.Model):
         Order,
         on_delete=models.DO_NOTHING,
         verbose_name='Заказ',
+        related_name='orderproducts'
     )
     quantity = models.IntegerField(
         verbose_name='Количество товара',
